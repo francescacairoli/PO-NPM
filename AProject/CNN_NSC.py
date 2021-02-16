@@ -90,6 +90,8 @@ def run_nsc(train_fn, test_fn, n_eps):
 	trainX, trainY, testX, testY = load_dataset(train_fn, test_fn)
 	# prepare pixel data
 	trainX, testX = preprocess_inputs(trainX, testX)
+
+	print("------------xxxxxxxxxxxxxxxxxxxxxxx----------------", trainX.shape, testX.shape)
 	# define model
 	model = define_model(trainX.shape[1], trainX.shape[2])
 	# fit model
@@ -101,14 +103,14 @@ def run_nsc(train_fn, test_fn, n_eps):
 	summarize_diagnostics(history)
 
 
-if __name__ == '__main__':
-	n_train_points = 20000
-	n_test_points = 100
-	past_horizon = 10
-	future_horizon = 10
-	train_filename = 'Datasets/renamed_dataset_basal_insulin_{}points_pastH={}_futureH={}.pickle'.format(n_train_points, past_horizon, future_horizon)
-	test_filename = 'Datasets/renamed_dataset_basal_insulin_{}points_pastH={}_futureH={}.pickle'.format(n_test_points, past_horizon, future_horizon)
+#if __name__ == '__main__':
+n_train_points = 10000
+n_test_points = 1000
+past_horizon = 10
+future_horizon = 10
+train_filename = 'Datasets/navigator_renamed_dataset_basal_insulin_{}points_pastH={}_futureH={}.pickle'.format(n_train_points, past_horizon, future_horizon)
+test_filename = 'Datasets/navigator_renamed_dataset_basal_insulin_{}points_pastH={}_futureH={}.pickle'.format(n_test_points, past_horizon, future_horizon)
 
-	nb_epochs = 100
+nb_epochs = 100
 
-	run_nsc(train_filename, test_filename, nb_epochs)
+run_nsc(train_filename, test_filename, nb_epochs)
