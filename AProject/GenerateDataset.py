@@ -2,10 +2,10 @@ from ArtificialPancreas import *
 from AP_labeling import *
 import pickle
 
-past_horizon = 10
+past_horizon = 32
 future_horizon = 10
 
-n_points_dataset = 1000
+n_points_dataset = 20000
 red_dim = 6
 CHO_max = 150
 

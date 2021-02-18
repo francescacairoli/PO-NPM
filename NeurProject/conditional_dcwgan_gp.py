@@ -18,8 +18,7 @@ import torch
 
 import pickle
 import matplotlib.pyplot as plt
-
-os.makedirs("pytorch_se", exist_ok=True)
+plt.rcParams.update({'font.size': 22})
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_epochs", type=int, default=200, help="number of epochs of training")
@@ -31,7 +30,7 @@ parser.add_argument("--n_cpu", type=int, default=8, help="number of cpu threads 
 parser.add_argument("--latent_dim", type=int, default=100, help="dimensionality of the latent space")
 parser.add_argument("--n_critic", type=int, default=5, help="number of training steps for discriminator per iter")
 parser.add_argument("--sample_interval", type=int, default=400, help="interval betwen image samples")
-parser.add_argument("--traj_len", type=int, default=20, help="number of steps")
+parser.add_argument("--traj_len", type=int, default=32, help="number of steps")
 parser.add_argument("--y_dim", type=int, default=1, help="number of channels of y")
 parser.add_argument("--x_dim", type=int, default=2, help="number of channels of x")
 opt = parser.parse_args()
@@ -42,8 +41,8 @@ cuda = True if torch.cuda.is_available() else False
 
 class Dataset(object):
     def __init__(self):
-        self.trainset_fn = "Datasets/dataset_20000points_pastH=20_futureH=20_noise_sigma=1.0.pickle"
-        self.test_fn = "Datasets/dataset_50points_pastH=20_futureH=20_noise_sigma=1.0.pickle"
+        self.trainset_fn = "Datasets/dataset_20000points_pastH=32_futureH=20_noise_sigma=1.0.pickle"
+        self.test_fn = "Datasets/dataset_50points_pastH=32_futureH=20_noise_sigma=1.0.pickle"
 
     def load_train_data(self):
 
@@ -152,13 +151,13 @@ class Discriminator(nn.Module):
         self.model = nn.Sequential(
             *discriminator_block(opt.x_dim+opt.y_dim, 16),
             *discriminator_block(16, 32),
-            #*discriminator_block(32, 64),
-            #*discriminator_block(64, 128),
+            *discriminator_block(32, 64),
+            *discriminator_block(64, 128),
         )
 
         # The height and width of downsampled image
-        ds_size = opt.traj_len // 2 ** 2
-        self.adv_layer = nn.Sequential(nn.Linear(32 * ds_size, 1))
+        ds_size = opt.traj_len // 2 ** 4
+        self.adv_layer = nn.Sequential(nn.Linear(128 * ds_size, 1))
         
     def forward(self, trajs, conditions):
         d_in = torch.cat((trajs, conditions), 1)
@@ -167,24 +166,27 @@ class Discriminator(nn.Module):
         validity = self.adv_layer(out_flat)
         return validity
 
+DO_TRAINING = True
+
+if DO_TRAINING:
+    ID = str(np.random.randint(0,100000))
+    print("ID = ", ID)
+else:
+    ID = "99389"
+
+plots_path = "PT_Plots/ID_"+ID
+os.makedirs(plots_path, exist_ok=True)
+f = open(plots_path+"/log.txt", "w")
+f.write(str(opt))
+f.close()
+
+MODEL_PATH = plots_path+"/generator_{}epochs.pt".format(opt.n_epochs)
 
 # Loss weight for gradient penalty
 lambda_gp = 10
 
-# Initialize generator and discriminator
-generator = Generator()
-discriminator = Discriminator()
-
-if cuda:
-    generator.cuda()
-    discriminator.cuda()
-
 ds = Dataset()
 ds.load_train_data()
-
-# Optimizers
-optimizer_G = torch.optim.Adam(generator.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
-optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
 
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
@@ -218,72 +220,103 @@ def generate_random_conditions():
 # ----------
 #  Training
 # ----------
+# Initialize generator and discriminator
+generator = Generator()
+discriminator = Discriminator()
 
-batches_done = 0
-for epoch in range(opt.n_epochs):
-    bat_per_epo = int(ds.n_points_dataset / opt.batch_size)
-    n_steps = bat_per_epo * opt.n_epochs
-    for i in range(n_steps):
-        trajs_np, conds_np = ds.generate_mini_batches(opt.batch_size)
-        # Configure input
-        real_trajs = Variable(Tensor(trajs_np))
-        conds = Variable(Tensor(conds_np))
+if cuda:
+    generator.cuda()
+    discriminator.cuda()
 
-        # ---------------------
-        #  Train Discriminator
-        # ---------------------
+if DO_TRAINING:
+    
+    # Optimizers
+    optimizer_G = torch.optim.Adam(generator.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
+    optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
 
-        optimizer_D.zero_grad()
+    
+    batches_done = 0
+    G_losses = []
+    D_losses = []
+    for epoch in range(opt.n_epochs):
+        bat_per_epo = int(ds.n_points_dataset / opt.batch_size)
+        n_steps = bat_per_epo * opt.n_epochs
+        
+        tmp_G_loss = []
+        tmp_D_loss = []
+        
+        for i in range(n_steps):
+            trajs_np, conds_np = ds.generate_mini_batches(opt.batch_size)
+            # Configure input
+            real_trajs = Variable(Tensor(trajs_np))
+            conds = Variable(Tensor(conds_np))
 
-        # Sample noise as generator input
-        z = Variable(Tensor(np.random.normal(0, 1, (opt.batch_size, opt.latent_dim))))
+            # ---------------------
+            #  Train Discriminator
+            # ---------------------
 
-        # Generate a batch of images
-        fake_trajs = generator(z, conds)
+            optimizer_D.zero_grad()
 
-        # Real images
-        real_validity = discriminator(real_trajs, conds)
-        # Fake images
-        fake_validity = discriminator(fake_trajs, conds)
-        # Gradient penalty
-        gradient_penalty = compute_gradient_penalty(discriminator, real_trajs.data, fake_trajs.data, conds.data)
-        # Adversarial loss
-        d_loss = -torch.mean(real_validity) + torch.mean(fake_validity) + lambda_gp * gradient_penalty
-
-        d_loss.backward(retain_graph=True)
-        optimizer_D.step()
-
-        optimizer_G.zero_grad()
-
-        # Train the generator every n_critic steps
-        if i % opt.n_critic == 0:
-
-            # -----------------
-            #  Train Generator
-            # -----------------
-            #optimizer_G.zero_grad()
-            gen_conds = Variable(Tensor(generate_random_conditions()))
+            # Sample noise as generator input
+            z = Variable(Tensor(np.random.normal(0, 1, (opt.batch_size, opt.latent_dim))))
 
             # Generate a batch of images
-            gen_trajs = generator(z, gen_conds)
+            fake_trajs = generator(z, conds)
 
-            # Loss measures generator's ability to fool the discriminator
-            # Train on fake images
-            fake_validity = discriminator(gen_trajs, gen_conds)
-            g_loss = -torch.mean(fake_validity)
+            # Real images
+            real_validity = discriminator(real_trajs, conds)
+            # Fake images
+            fake_validity = discriminator(fake_trajs, conds)
+            # Gradient penalty
+            gradient_penalty = compute_gradient_penalty(discriminator, real_trajs.data, fake_trajs.data, conds.data)
+            # Adversarial loss
+            d_loss = -torch.mean(real_validity) + torch.mean(fake_validity) + lambda_gp * gradient_penalty
+            tmp_D_loss.append(d_loss.item())
 
-            g_loss.backward(retain_graph=True)
-            optimizer_G.step()
+            d_loss.backward(retain_graph=True)
+            optimizer_D.step()
 
-            print(
-                "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-                % (epoch, opt.n_epochs, i, n_steps, d_loss.item(), g_loss.item())
-            )
+            optimizer_G.zero_grad()
 
-            #if batches_done % opt.sample_interval == 0:
-                #sample_image(n_row=10, batches_done=batches_done)
+            # Train the generator every n_critic steps
+            if i % opt.n_critic == 0:
 
-            batches_done += opt.n_critic
+                # -----------------
+                #  Train Generator
+                # -----------------
+                #optimizer_G.zero_grad()
+                gen_conds = Variable(Tensor(generate_random_conditions()))
+
+                # Generate a batch of images
+                gen_trajs = generator(z, gen_conds)
+
+                # Loss measures generator's ability to fool the discriminator
+                # Train on fake images
+                fake_validity = discriminator(gen_trajs, gen_conds)
+                g_loss = -torch.mean(fake_validity)
+                tmp_G_loss.append(g_loss.item())
+
+                g_loss.backward(retain_graph=True)
+                optimizer_G.step()
+
+                print(
+                    "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
+                    % (epoch, opt.n_epochs, i, n_steps, d_loss.item(), g_loss.item())
+                )
+
+                #if batches_done % opt.sample_interval == 0:
+                    #sample_image(n_row=10, batches_done=batches_done)
+
+                batches_done += opt.n_critic
+        D_losses.append(np.mean(tmp_D_loss))
+        G_losses.append(np.mean(tmp_G_loss))
+
+    # save the ultimate trained generator    
+    torch.save(generator, MODEL_PATH)
+else:
+    # load the ultimate trained generator
+    torch.load(MODEL_PATH)
+    generator.eval()
 
 ds.load_test_data()
 n_gen_trajs = 3
@@ -292,18 +325,27 @@ for iii in range(ds.n_points_test):
     print("Test point nb ", iii+1, " / ", ds.n_points_test)
     for jjj in range(n_gen_trajs):
         z_noise = np.random.normal(0, 1, (1, opt.latent_dim))
-        temp_out = generator(Variable(Tensor(z_noise)), Variable(Tensor([ds.Y_test[iii]])))
+        temp_out = generator(Variable(Tensor(z_noise)), Variable(Tensor([ds.Y_test_transp[iii]])))
         gen_trajectories[iii,jjj] = temp_out.detach().cpu().numpy()[0]
 tspan = range(opt.traj_len)
 for kkk in range(ds.n_points_test):
     fig, axs = plt.subplots(opt.x_dim)
 
-    axs[0].plot(tspan, ds.X_test_transp[kkk,0], color="blue")
-    axs[1].plot(tspan, ds.X_test_transp[kkk,1], color="blue")
+    axs[0].scatter(tspan, ds.X_test_transp[kkk,0], color="blue")
+    axs[1].scatter(tspan, ds.X_test_transp[kkk,1], color="blue")
     for traj_idx in range(n_gen_trajs):
         axs[0].plot(tspan, gen_trajectories[kkk,traj_idx,0], color="orange")
         axs[1].plot(tspan, gen_trajectories[kkk,traj_idx,1], color="orange")
         
-    
-    fig.savefig("PT_Plots/Trajectories"+str(kkk)+".png")
+    plt.tight_layout()
+    fig.savefig(plots_path+"/Trajectories"+str(kkk)+".png")
     plt.close()
+
+fig_losses = plt.figure()
+plt.plot(np.arange(opt.n_epochs), G_losses, label="gener")
+plt.plot(np.arange(opt.n_epochs), D_losses, label="critic")
+plt.legend()
+plt.tight_layout()
+plt.title("losses")
+fig_losses.savefig(plots_path+"/losses.png")
+plt.close()

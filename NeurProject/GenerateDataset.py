@@ -1,7 +1,7 @@
 from SpikingNeuron import *
 import pickle
 
-past_horizon = 20
+past_horizon = 32
 future_horizon = 20
 
 n_points_dataset = 20000
