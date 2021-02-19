@@ -18,8 +18,9 @@ import torch
 
 import pickle
 import matplotlib.pyplot as plt
-
-os.makedirs("pytorch_se", exist_ok=True)
+plt.rcParams.update({'font.size': 22})
+ 
+from ArtificialPancreasDataset import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_epochs", type=int, default=200, help="number of epochs of training")
@@ -42,85 +43,12 @@ opt.c_dim = opt.y_dim+opt.w_dim
 
 cuda = True if torch.cuda.is_available() else False
 
-class Dataset(object):
-	def __init__(self):
-		self.trainset_fn = "Datasets/navigator_renamed_dataset_basal_insulin_20000points_pastH=32_futureH=10.pickle"
-		self.test_fn = "Datasets/navigator_renamed_dataset_basal_insulin_50points_pastH=32_futureH=10.pickle"
 
-	def load_train_data(self):
-
-		file = open(self.trainset_fn, 'rb')
-		data = pickle.load(file)
-		file.close()
-
-		X = data["x"]
-		Y = data["y"]
-		W = data["w"]
-
-		C = np.concatenate((Y,W), axis=2)
-
-		xmax = np.max(X, axis = 0)
-		cmax = np.max(C, axis = 0)
-		self.HMAX = (xmax, cmax)
-		xmin = np.min(X, axis = 0)
-		cmin = np.min(C, axis = 0)
-		self.HMIN = (xmin, cmin)
-
-		self.X_train = -1+2*(X-self.HMIN[0])/(self.HMAX[0]-self.HMIN[0])
-		self.C_train = -1+2*(C-self.HMIN[1])/(self.HMAX[1]-self.HMIN[1])
-		
-		self.n_points_dataset = self.X_train.shape[0]
-
-		Xt = np.empty((self.n_points_dataset, opt.x_dim, opt.traj_len))
-		Ct = np.empty((self.n_points_dataset, opt.c_dim, opt.traj_len))
-		
-		for j in range(self.n_points_dataset):
-			Xt[j] = self.X_train[j].T
-			Ct[j] = self.C_train[j].T
-			
-		self.X_train_transp = Xt
-		self.C_train_transp = Ct
-
-
-	def load_test_data(self):
-
-		file = open(self.test_fn, 'rb')
-		data = pickle.load(file)
-		file.close()
-
-		X = data["x"]
-		W = data["w"]
-		Y = data["y"]
-		C = np.concatenate((Y,W), axis=2)
-		print("DATASET SHAPES: ", X.shape, Y.shape, W.shape, C.shape)
-
-		self.X_test = -1+2*(X-self.HMIN[0])/(self.HMAX[0]-self.HMIN[0])
-		self.C_test = -1+2*(C-self.HMIN[1])/(self.HMAX[1]-self.HMIN[1])
-		
-		self.n_points_test = self.X_test.shape[0]
-
-		Xt = np.empty((self.n_points_test, opt.x_dim, opt.traj_len))
-		Ct = np.empty((self.n_points_test, opt.c_dim, opt.traj_len))
-		for j in range(self.n_points_test):
-			Xt[j] = self.X_test[j].T
-			Ct[j] = self.C_test[j].T
-		self.X_test_transp = Xt
-		self.C_test_transp = Ct
-
-	def generate_mini_batches(self, n_samples):
-		
-		ix = np.random.randint(0, self.X_train.shape[0], n_samples)
-		Xb = self.X_train_transp[ix]
-		Cb = self.C_train_transp[ix]
-		
-		return Xb, Cb
 
 
 class Generator(nn.Module):
 	def __init__(self):
 		super(Generator, self).__init__()
-
-		#self.condition_emb = nn.Embedding(opt.traj_len * opt.y_dim, opt.traj_len * opt.y_dim)
 
 		self.init_size = opt.traj_len // 4
 		self.l1 = nn.Sequential(nn.Linear(opt.latent_dim + opt.traj_len * opt.c_dim, 128 * self.init_size))
@@ -128,7 +56,7 @@ class Generator(nn.Module):
 		self.conv_blocks = nn.Sequential(
 			nn.BatchNorm1d(128),
 			nn.Upsample(scale_factor=2),
-			nn.Conv1d(128, 64, 3, stride=1, padding=1),
+			nn.Conv1d(128, 128, 3, stride=1, padding=1),
 			nn.BatchNorm1d(128, 0.8),
 			nn.LeakyReLU(0.2, inplace=True),
 			nn.Upsample(scale_factor=2),
@@ -142,7 +70,7 @@ class Generator(nn.Module):
 	def forward(self, noise, conditions):
 		conds_flat = conditions.view(conditions.shape[0],-1)
 		gen_input = torch.cat((conds_flat, noise), 1)
-		out = self.l1(gen_input)     
+		out = self.l1(gen_input)    
 		out = out.view(out.shape[0], 128, self.init_size)
 		traj = self.conv_blocks(out)
 		return traj
@@ -170,13 +98,27 @@ class Discriminator(nn.Module):
 		self.adv_layer = nn.Sequential(nn.Linear(128 * ds_size, 1))
 		
 	def forward(self, trajs, conditions):
-		#print("DISCR: ", trajs.shape, conditions.shape)
 		d_in = torch.cat((trajs, conditions), 1)
 		out = self.model(d_in)
 		out_flat = out.view(out.shape[0], -1)
 		validity = self.adv_layer(out_flat)
 		return validity
 
+DO_TRAINING = True
+
+if DO_TRAINING:
+	ID = str(np.random.randint(0,100000))
+	print("ID = ", ID)
+else:
+	ID = "__ID_HERE__"
+
+plots_path = "SE_Plots/ID_"+ID
+os.makedirs(plots_path, exist_ok=True)
+f = open(plots_path+"/log.txt", "w")
+f.write(str(opt))
+f.close()
+
+MODEL_PATH = plots_path+"/generator_{}epochs.pt".format(opt.n_epochs)
 
 # Loss weight for gradient penalty
 lambda_gp = 10
@@ -189,7 +131,7 @@ if cuda:
 	generator.cuda()
 	discriminator.cuda()
 
-ds = Dataset()
+ds = ArtificialPancreasDataset()
 ds.load_train_data()
 
 # Optimizers
@@ -203,7 +145,6 @@ def compute_gradient_penalty(D, real_samples, fake_samples, lab):
 	"""Calculates the gradient penalty loss for WGAN GP"""
 	# Random weight term for interpolation between real and fake samples
 	
-	#print("------", real_samples.shape, fake_samples.shape)
 	alpha = Tensor(np.random.random((real_samples.size(0), 1, 1)))
 	# Get random interpolation between real and fake samples
 	interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
@@ -229,71 +170,96 @@ def generate_random_conditions():
 #  Training
 # ----------
 
-batches_done = 0
-for epoch in range(opt.n_epochs):
+if DO_TRAINING:
+	batches_done = 0
+	G_losses = []
+	D_losses = []
+
 	bat_per_epo = int(ds.n_points_dataset / opt.batch_size)
 	n_steps = bat_per_epo * opt.n_epochs
-	for i in range(n_steps):
-		trajs_np, conds_np = ds.generate_mini_batches(opt.batch_size)
-		# Configure input
-		real_trajs = Variable(Tensor(trajs_np))
-		conds = Variable(Tensor(conds_np))
+	
+	for epoch in range(opt.n_epochs):
 
-		# ---------------------
-		#  Train Discriminator
-		# ---------------------
+		tmp_G_loss = []
+		tmp_D_loss = []
 
-		optimizer_D.zero_grad()
+		for i in range(n_steps):
+			trajs_np, conds_np, _ = ds.generate_mini_batches(opt.batch_size)
+			# Configure input
+			real_trajs = Variable(Tensor(trajs_np))
+			conds = Variable(Tensor(conds_np))
+			# ---------------------
+			#  Train Discriminator
+			# ---------------------
 
-		# Sample noise as generator input
-		z = Variable(Tensor(np.random.normal(0, 1, (opt.batch_size, opt.latent_dim))))
+			optimizer_D.zero_grad()
 
-		# Generate a batch of images
-		fake_trajs = generator(z, conds)
-
-		# Real images
-		real_validity = discriminator(real_trajs, conds)
-		# Fake images
-		fake_validity = discriminator(fake_trajs, conds)
-		# Gradient penalty
-		gradient_penalty = compute_gradient_penalty(discriminator, real_trajs.data, fake_trajs.data, conds.data)
-		# Adversarial loss
-		d_loss = -torch.mean(real_validity) + torch.mean(fake_validity) + lambda_gp * gradient_penalty
-
-		d_loss.backward(retain_graph=True)
-		optimizer_D.step()
-
-		optimizer_G.zero_grad()
-
-		# Train the generator every n_critic steps
-		if i % opt.n_critic == 0:
-
-			# -----------------
-			#  Train Generator
-			# -----------------
-			#optimizer_G.zero_grad()
-			gen_conds = Variable(Tensor(generate_random_conditions()))
+			# Sample noise as generator input
+			z = Variable(Tensor(np.random.normal(0, 1, (opt.batch_size, opt.latent_dim))))
 
 			# Generate a batch of images
-			gen_trajs = generator(z, gen_conds)
+			fake_trajs = generator(z, conds)
 
-			# Loss measures generator's ability to fool the discriminator
-			# Train on fake images
-			fake_validity = discriminator(gen_trajs, gen_conds)
-			g_loss = -torch.mean(fake_validity)
+			# Real images
+			real_validity = discriminator(real_trajs, conds)
+			# Fake images
+			fake_validity = discriminator(fake_trajs, conds)
+			# Gradient penalty
+			gradient_penalty = compute_gradient_penalty(discriminator, real_trajs.data, fake_trajs.data, conds.data)
+			# Adversarial loss
+			d_loss = -torch.mean(real_validity) + torch.mean(fake_validity) + lambda_gp * gradient_penalty
+			tmp_D_loss.append(d_loss.item())
 
-			g_loss.backward(retain_graph=True)
-			optimizer_G.step()
+			d_loss.backward(retain_graph=True)
+			optimizer_D.step()
 
-			print(
-				"[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-				% (epoch, opt.n_epochs, i, n_steps, d_loss.item(), g_loss.item())
-			)
+			optimizer_G.zero_grad()
 
-			#if batches_done % opt.sample_interval == 0:
-				#sample_image(n_row=10, batches_done=batches_done)
+			# Train the generator every n_critic steps
+			if i % opt.n_critic == 0:
 
-			batches_done += opt.n_critic
+				# -----------------
+				#  Train Generator
+				# -----------------
+				gen_conds = Variable(Tensor(generate_random_conditions()))
+				# Generate a batch of images
+				gen_trajs = generator(z, gen_conds)
+
+				# Loss measures generator's ability to fool the discriminator
+				# Train on fake images
+				fake_validity = discriminator(gen_trajs, gen_conds)
+				g_loss = -torch.mean(fake_validity)
+
+				tmp_G_loss.append(g_loss.item())
+
+				g_loss.backward(retain_graph=True)
+				optimizer_G.step()
+
+				print(
+					"[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
+					% (epoch, opt.n_epochs, i, n_steps, d_loss.item(), g_loss.item())
+				)
+
+				batches_done += opt.n_critic
+
+		D_losses.append(np.mean(tmp_D_loss))
+		G_losses.append(np.mean(tmp_G_loss))
+
+	fig_losses = plt.figure()
+	plt.plot(np.arange(opt.n_epochs), G_losses, label="gener")
+	plt.plot(np.arange(opt.n_epochs), D_losses, label="critic")
+	plt.legend()
+	plt.tight_layout()
+	plt.title("losses")
+	fig_losses.savefig(plots_path+"/losses.png")
+	plt.close()
+	# save the ultimate trained generator    
+	torch.save(generator, MODEL_PATH)
+else:
+	# load the ultimate trained generator
+	torch.load(MODEL_PATH)
+	generator.eval()
+
 
 ds.load_test_data()
 n_gen_trajs = 5
@@ -323,5 +289,7 @@ for kkk in range(ds.n_points_test):
 		axs[1,1].plot(tspan, gen_trajectories[kkk,traj_idx,4], color="orange")
 		axs[1,2].plot(tspan, gen_trajectories[kkk,traj_idx,5], color="orange")
 	
-	fig.savefig("PT_Plots/Trajectories"+str(kkk)+".png")
+	plt.tight_layout()
+	fig.savefig(plots_path+"/Trajectories"+str(kkk)+".png")
 	plt.close()
+

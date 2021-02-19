@@ -20,6 +20,8 @@ import pickle
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 22})
 
+from SpikingNeuronDataset import *
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_epochs", type=int, default=200, help="number of epochs of training")
 parser.add_argument("--batch_size", type=int, default=64, help="size of the batches")
@@ -39,78 +41,12 @@ print(opt)
 
 cuda = True if torch.cuda.is_available() else False
 
-class Dataset(object):
-    def __init__(self):
-        self.trainset_fn = "Datasets/dataset_20000points_pastH=32_futureH=20_noise_sigma=1.0.pickle"
-        self.test_fn = "Datasets/dataset_50points_pastH=32_futureH=20_noise_sigma=1.0.pickle"
 
-    def load_train_data(self):
-
-        file = open(self.trainset_fn, 'rb')
-        data = pickle.load(file)
-        file.close()
-
-        X = data["x"]
-        Y = np.expand_dims(data["y"], axis=2)
-        print("DATASET SHAPES: ", X.shape, Y.shape)
-
-        xmax = np.max(X, axis = 0)
-        ymax = np.max(Y, axis = 0)
-        self.HMAX = (xmax, ymax)
-        xmin = np.min(X, axis = 0)
-        ymin = np.min(Y, axis = 0)
-        self.HMIN = (xmin, ymin)
-
-        self.X_train = -1+2*(X-self.HMIN[0])/(self.HMAX[0]-self.HMIN[0])
-        self.Y_train = -1+2*(Y-self.HMIN[1])/(self.HMAX[1]-self.HMIN[1])
-        
-        self.n_points_dataset = self.X_train.shape[0]
-
-        Xt = np.empty((self.n_points_dataset, opt.x_dim, opt.traj_len))
-        Yt = np.empty((self.n_points_dataset, opt.y_dim, opt.traj_len))
-        for j in range(self.n_points_dataset):
-            Xt[j] = self.X_train[j].T
-            Yt[j] = self.Y_train[j].T
-        self.X_train_transp = Xt
-        self.Y_train_transp = Yt
-
-    def load_test_data(self):
-
-        file = open(self.test_fn, 'rb')
-        data = pickle.load(file)
-        file.close()
-
-        X = data["x"]
-        Y = np.expand_dims(data["y"], axis=2)
-        print("DATASET SHAPES: ", X.shape, Y.shape)
-
-        self.X_test = -1+2*(X-self.HMIN[0])/(self.HMAX[0]-self.HMIN[0])
-        self.Y_test = -1+2*(Y-self.HMIN[1])/(self.HMAX[1]-self.HMIN[1])
-        
-        self.n_points_test = self.X_test.shape[0]
-
-        Xt = np.empty((self.n_points_test, opt.x_dim, opt.traj_len))
-        Yt = np.empty((self.n_points_test, opt.y_dim, opt.traj_len))
-        for j in range(self.n_points_test):
-            Xt[j] = self.X_test[j].T
-            Yt[j] = self.Y_test[j].T
-        self.X_test_transp = Xt
-        self.Y_test_transp = Yt
-
-    def generate_mini_batches(self, n_samples):
-        
-        ix = np.random.randint(0, self.X_train.shape[0], n_samples)
-        Xb = self.X_train_transp[ix]
-        Yb = self.Y_train_transp[ix]
-        
-        return Xb, Yb
 
 
 class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
-
-        #self.condition_emb = nn.Embedding(opt.traj_len * opt.y_dim, opt.traj_len * opt.y_dim)
 
         self.init_size = opt.traj_len // 4
         self.l1 = nn.Sequential(nn.Linear(opt.latent_dim + opt.traj_len * opt.y_dim, 128 * self.init_size))
@@ -185,7 +121,7 @@ MODEL_PATH = plots_path+"/generator_{}epochs.pt".format(opt.n_epochs)
 # Loss weight for gradient penalty
 lambda_gp = 10
 
-ds = Dataset()
+ds = SpikingNeuronDataset()
 ds.load_train_data()
 
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
@@ -246,7 +182,7 @@ if DO_TRAINING:
         tmp_D_loss = []
         
         for i in range(n_steps):
-            trajs_np, conds_np = ds.generate_mini_batches(opt.batch_size)
+            trajs_np, conds_np, _ = ds.generate_mini_batches(opt.batch_size)
             # Configure input
             real_trajs = Variable(Tensor(trajs_np))
             conds = Variable(Tensor(conds_np))
@@ -304,12 +240,18 @@ if DO_TRAINING:
                     % (epoch, opt.n_epochs, i, n_steps, d_loss.item(), g_loss.item())
                 )
 
-                #if batches_done % opt.sample_interval == 0:
-                    #sample_image(n_row=10, batches_done=batches_done)
-
                 batches_done += opt.n_critic
         D_losses.append(np.mean(tmp_D_loss))
         G_losses.append(np.mean(tmp_G_loss))
+    
+    fig_losses = plt.figure()
+    plt.plot(np.arange(opt.n_epochs), G_losses, label="gener")
+    plt.plot(np.arange(opt.n_epochs), D_losses, label="critic")
+    plt.legend()
+    plt.tight_layout()
+    plt.title("losses")
+    fig_losses.savefig(plots_path+"/losses.png")
+    plt.close()
 
     # save the ultimate trained generator    
     torch.save(generator, MODEL_PATH)
@@ -341,11 +283,3 @@ for kkk in range(ds.n_points_test):
     fig.savefig(plots_path+"/Trajectories"+str(kkk)+".png")
     plt.close()
 
-fig_losses = plt.figure()
-plt.plot(np.arange(opt.n_epochs), G_losses, label="gener")
-plt.plot(np.arange(opt.n_epochs), D_losses, label="critic")
-plt.legend()
-plt.tight_layout()
-plt.title("losses")
-fig_losses.savefig(plots_path+"/losses.png")
-plt.close()

@@ -16,7 +16,7 @@ def load_dataset(train_fn, test_fn):
 	train_data = pickle.load(train_file)
 	train_file.close()
 	trainX = np.concatenate((train_data["y"], train_data["u"], train_data["w"]), axis=2)
-	print("------", trainX.shape)
+
 	trainY = np.zeros((len(trainX), 2))
 	for j in range(len(trainX)):
 		trainY[j, train_data["cat_labels"][j]] = 1
@@ -27,7 +27,7 @@ def load_dataset(train_fn, test_fn):
 	test_file.close()
 
 	testX = np.concatenate((test_data["y"], test_data["u"], test_data["w"]), axis=2)
-	print("------", testX.shape)
+
 	testY = np.zeros((len(testX), 2))
 	for i in range(len(testX)):
 		testY[i, test_data["cat_labels"][i]] = 1
@@ -88,8 +88,6 @@ def run_end_to_end(train_fn, test_fn, n_eps):
 	trainX, trainY, testX, testY = load_dataset(train_fn, test_fn)
 	# prepare pixel data
 	trainX, testX = preprocess_inputs(trainX, testX)
-
-	print(trainX.shape, testX.shape)
 	# define model
 	model = define_model(trainX.shape[1])
 	# fit model
