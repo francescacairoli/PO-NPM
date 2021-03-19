@@ -20,7 +20,7 @@ import pickle
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 22})
 
-from SpikingNeuronDataset import *
+from ArtificialPancreasDataset import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_epochs", type=int, default=200, help="number of epochs of training")
@@ -31,71 +31,62 @@ parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of firs
 parser.add_argument("--n_cpu", type=int, default=8, help="number of cpu threads to use during batch generation")
 parser.add_argument("--traj_len", type=int, default=32, help="number of steps")
 parser.add_argument("--y_dim", type=int, default=1, help="number of channels of y")
-parser.add_argument("--x_dim", type=int, default=2, help="number of channels of x")
-
-parser.add_argument("--output_dim", type=int, default=2, help="dimension of the output layer")
+parser.add_argument("--x_dim", type=int, default=6, help="number of channels of x")
+parser.add_argument("--w_dim", type=int, default=1, help="number of channels of w")
 opt = parser.parse_args()
 print(opt)
 
+opt.c_dim = opt.y_dim+opt.w_dim
 
 cuda = True if torch.cuda.is_available() else False
 
-ds = SpikingNeuronDataset()
+ds = ArtificialPancreasDataset()
 ds.load_train_data()
 
-class PO_NSC(nn.Module):
+class NSC(nn.Module):
 
     def __init__(self):
-        super(PO_NSC, self).__init__()
-        
-        self.keep_prob = 0.8
-        self.nb_filters = 64
+        super(NSC, self).__init__()
+        self.keep_prob = 1
         
         self.layer1 = nn.Sequential(
-            nn.Conv1d(opt.y_dim, self.nb_filters, kernel_size=3, stride=1, padding=1),
+            nn.Conv1d(opt.x_dim, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.Dropout(p=1 - self.keep_prob))
         self.layer2 = torch.nn.Sequential(
-            nn.Conv1d(self.nb_filters, self.nb_filters, kernel_size=3, stride=1, padding=1),
+            nn.Conv1d(32, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.Dropout(p=1 - self.keep_prob))
         self.layer3 = torch.nn.Sequential(
-            nn.Conv1d(self.nb_filters, self.nb_filters, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Dropout(p=1 - self.keep_prob))
-        self.layer4 = torch.nn.Sequential(
-            nn.Conv1d(self.nb_filters, self.nb_filters, kernel_size=3, stride=1, padding=1),
+            nn.Conv1d(64, 128, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.Dropout(p=1 - self.keep_prob))
 
-        self.fc1 = nn.Linear(opt.traj_len * self.nb_filters, 100, bias=True)
+        self.fc1 = nn.Linear(opt.traj_len * 128, 625, bias=True)
         nn.init.xavier_uniform_(self.fc1.weight)
-        self.layer5 = nn.Sequential(
+        self.layer4 = nn.Sequential(
             self.fc1,
             nn.ReLU(),
             nn.Dropout(p=1 - self.keep_prob))
         
-        self.fc2 = nn.Linear(100, opt.output_dim, bias=True)
+        self.fc2 = nn.Linear(625, 2, bias=True)
         nn.init.xavier_uniform_(self.fc2.weight) # initialize parameters
-        self.layer6 = nn.Sequential(self.fc2)#,nn.Sigmoid())
 
     def forward(self, x):
         out = self.layer1(x)
         out = self.layer2(out)
         out = self.layer3(out)
-        out = self.layer4(out)
         out = out.view(out.size(0), -1)   # Flatten them for FC
-        out = self.layer5(out)
-        out = self.layer6(out)
+        out = self.fc1(out)
+        out = self.fc2(out)
         return out
 
-ponsc = PO_NSC()
+nsc = NSC()
 if cuda:
-    ponsc.cuda()
-
-
+    nsc.cuda()
+    
 criterion = nn.CrossEntropyLoss()    # Softmax is internally computed.
-optimizer = torch.optim.Adam(ponsc.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
+optimizer = torch.optim.Adam(nsc.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
 
 DO_TRAINING = True
 
@@ -105,13 +96,13 @@ if DO_TRAINING:
 else:
     ID = "99389"
 
-plots_path = "PO_NSC_Plots/ID_"+ID
+plots_path = "NSC_Plots/ID_"+ID
 os.makedirs(plots_path, exist_ok=True)
 f = open(plots_path+"/log.txt", "w")
 f.write(str(opt))
 f.close()
 
-MODEL_PATH = plots_path+"/ponsc_{}epochs.pt".format(opt.n_epochs)
+MODEL_PATH = plots_path+"/nsc_{}epochs.pt".format(opt.n_epochs)
 
 
 
@@ -138,15 +129,15 @@ if DO_TRAINING:
         for i in range(n_steps):
             
             # Select a minibatch
-            _, C, T = ds.generate_mini_batches(opt.batch_size)
+            X, _, T = ds.generate_mini_batches(opt.batch_size)
             # initialization of the gradients
             
-            Ct = Variable(FloatTensor(C))
+            Xt = Variable(FloatTensor(X))
             Tt = Variable(LongTensor(T))
             optimizer.zero_grad()
             
             # Forward propagation: compute the output
-            hypothesis = ponsc(Ct)
+            hypothesis = nsc(Xt)
 
             # Computation of the cost J
             loss = criterion(hypothesis, Tt) # <= compute the loss function
@@ -178,14 +169,13 @@ if DO_TRAINING:
     plt.title("accuracy")
     fig_acc.savefig(plots_path+"/accuracies.png")
     plt.close()
-    
-    torch.save(ponsc, MODEL_PATH)
+    torch.save(nsc, MODEL_PATH)
 else:
-    ponsc = torch.load(MODEL_PATH)
-    ponsc.eval()
+    nsc = torch.load(MODEL_PATH)
+    nsc.eval()
 
 ds.load_test_data()
-Ctest = Variable(FloatTensor(ds.Y_test_transp))
+Xtest = Variable(FloatTensor(ds.X_test_transp))
 Ttest = Variable(LongTensor(ds.L_test))
-test_preds = ponsc(Ctest)
+test_preds = nsc(Xtest)
 print("Test accuracy: ", compute_accuracy(Ttest, test_preds))

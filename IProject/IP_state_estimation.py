@@ -20,7 +20,7 @@ import pickle
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 22})
 
-from SpikingNeuronDataset import *
+from InvertedPendulumDataset import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_epochs", type=int, default=200, help="number of epochs of training")
@@ -42,8 +42,6 @@ print(opt)
 cuda = True if torch.cuda.is_available() else False
 
 
-
-
 class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
@@ -53,33 +51,21 @@ class Generator(nn.Module):
 
         self.conv_blocks = nn.Sequential(
             nn.BatchNorm1d(64),
-            nn.Upsample(scale_factor=2),
-            nn.Conv1d(64, 128, 3, stride=1, padding=1),
+            nn.ConvTranspose1d(64, 128, 4, stride=2, padding=1),
             nn.BatchNorm1d(128, 0.8),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Upsample(scale_factor=2),
-            nn.Conv1d(128, 256, 3, stride=1, padding=1),
+            nn.ConvTranspose1d(128, 256, 4, stride=2, padding=1),
             nn.BatchNorm1d(256, 0.8),
             nn.LeakyReLU(0.2, inplace=True),
-            #nn.Upsample(scale_factor=2),
-            nn.Conv1d(256, 512, 3, stride=1, padding=1),
-            nn.BatchNorm1d(512, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv1d(512, 512, 3, stride=1, padding=1),
-            nn.BatchNorm1d(512, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv1d(512, 256, 3, stride=1, padding=1),
-            nn.BatchNorm1d(256, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            #nn.Upsample(scale_factor=2),
-            nn.Conv1d(256, 128, 3, stride=1, padding=1),
+            #nn.ConvTranspose1d(256, 256, 4, stride=2, padding=1),
+            #nn.BatchNorm1d(256, 0.8),
+            #nn.LeakyReLU(0.2, inplace=True),
+            nn.ConvTranspose1d(256, 128, 4, stride=2, padding=1),
             nn.BatchNorm1d(128, 0.8),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Upsample(scale_factor=2),
-            nn.Conv1d(128, 64, 3, stride=1, padding=1),
+            nn.ConvTranspose1d(128, 64, 4, stride=2, padding=1),
             nn.BatchNorm1d(64, 0.8),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Upsample(scale_factor=2),
             nn.Conv1d(64, opt.x_dim, 3, stride=1, padding=1),
             nn.Tanh(),
         )
@@ -98,21 +84,21 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
 
         def discriminator_block(in_filters, out_filters, bn=False):
-            block = [nn.Conv1d(in_filters, out_filters, 3, 2, 1), nn.LeakyReLU(0.2, inplace=True), nn.Dropout(0.25)]
+            block = [nn.Conv1d(in_filters, out_filters, 3, 2, 1), nn.LeakyReLU(0.2, inplace=True)]
             if bn:
                 block.append(nn.BatchNorm1d(out_filters, 0.8))
             return block
 
         self.model = nn.Sequential(
-            *discriminator_block(opt.x_dim+opt.y_dim, 16),
-            *discriminator_block(16, 32),
+            *discriminator_block(opt.x_dim+opt.y_dim, 32),
             *discriminator_block(32, 64),
             *discriminator_block(64, 128),
             *discriminator_block(128, 256),
+            #*discriminator_block(64, 32)             
         )
 
         # The height and width of downsampled image
-        ds_size = opt.traj_len // 2 ** 5
+        ds_size = opt.traj_len // 2 ** 4
         self.adv_layer = nn.Sequential(nn.Linear(256 * ds_size, 1))
         
     def forward(self, trajs, conditions):
@@ -128,9 +114,9 @@ if DO_TRAINING:
     ID = str(np.random.randint(0,100000))
     print("ID = ", ID)
 else:
-    ID = "39989"
+    ID = "99389"
 
-plots_path = "PT_Plots/ID_"+ID
+plots_path = "StateEstimation_Plots/ID_"+ID
 os.makedirs(plots_path, exist_ok=True)
 f = open(plots_path+"/log.txt", "w")
 f.write(str(opt))
@@ -141,7 +127,7 @@ MODEL_PATH = plots_path+"/generator_{}epochs.pt".format(opt.n_epochs)
 # Loss weight for gradient penalty
 lambda_gp = 10
 
-ds = SpikingNeuronDataset()
+ds = InvertedPendulumDataset()
 ds.load_train_data()
 
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
@@ -280,21 +266,21 @@ else:
     torch.load(MODEL_PATH)
     generator.eval()
 
-ds.load_test_data()
+ds.load_validation_data()
 n_gen_trajs = 3
-gen_trajectories = np.empty(shape=(ds.n_points_test, n_gen_trajs, opt.x_dim, opt.traj_len))
-for iii in range(ds.n_points_test):
-    print("Test point nb ", iii+1, " / ", ds.n_points_test)
+gen_trajectories = np.empty(shape=(ds.n_points_val, n_gen_trajs, opt.x_dim, opt.traj_len))
+for iii in range(ds.n_points_val):
+    print("Test point nb ", iii+1, " / ", ds.n_points_val)
     for jjj in range(n_gen_trajs):
         z_noise = np.random.normal(0, 1, (1, opt.latent_dim))
-        temp_out = generator(Variable(Tensor(z_noise)), Variable(Tensor([ds.Y_test_transp[iii]])))
+        temp_out = generator(Variable(Tensor(z_noise)), Variable(Tensor([ds.Y_val_transp[iii]])))
         gen_trajectories[iii,jjj] = temp_out.detach().cpu().numpy()[0]
 tspan = range(opt.traj_len)
-for kkk in range(ds.n_points_test):
+for kkk in range(ds.n_points_val):
     fig, axs = plt.subplots(opt.x_dim)
 
-    axs[0].scatter(tspan, ds.X_test_transp[kkk,0], color="blue")
-    axs[1].scatter(tspan, ds.X_test_transp[kkk,1], color="blue")
+    axs[0].scatter(tspan, ds.X_val_transp[kkk,0], color="blue")
+    axs[1].scatter(tspan, ds.X_val_transp[kkk,1], color="blue")
     for traj_idx in range(n_gen_trajs):
         axs[0].plot(tspan, gen_trajectories[kkk,traj_idx,0], color="orange")
         axs[1].plot(tspan, gen_trajectories[kkk,traj_idx,1], color="orange")

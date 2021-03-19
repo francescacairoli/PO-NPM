@@ -5,12 +5,12 @@ n_test_points = 50
 past_horizon = 20
 future_horizon = 20
 
-noise_dim = 100
+noise_dim = 480
 n_steps = past_horizon 
 
-n_epochs = 100
+n_epochs = 500
 batch_size = 256
-n_critic = 5
+n_critic = 10
 n_gen = 1
 
 do_train_flag = True

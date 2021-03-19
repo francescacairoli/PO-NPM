@@ -50,50 +50,33 @@ class Generator(nn.Module):
 	def __init__(self):
 		super(Generator, self).__init__()
 
-		self.init_size = opt.traj_len // 2**4
-		self.l1 = nn.Sequential(nn.Linear(opt.latent_dim + opt.traj_len * opt.c_dim, 64 * self.init_size))
+		self.init_size = opt.traj_len // 2**3#4
+		self.l1 = nn.Sequential(nn.Linear(opt.latent_dim + opt.traj_len * opt.c_dim, 128 * self.init_size))
 
 		self.conv_blocks = nn.Sequential(
-            nn.BatchNorm1d(64),
-            nn.Upsample(scale_factor=2),
-            nn.Conv1d(64, 128, 3, stride=1, padding=1),
-            nn.BatchNorm1d(128, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Upsample(scale_factor=2),
-            nn.Conv1d(128, 256, 3, stride=1, padding=1),
-            nn.BatchNorm1d(256, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            #nn.Upsample(scale_factor=2),
-            nn.Conv1d(256, 512, 3, stride=1, padding=1),
-            nn.BatchNorm1d(512, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv1d(512, 512, 3, stride=1, padding=1),
-            nn.BatchNorm1d(512, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv1d(512, 512, 3, stride=1, padding=1),
-            nn.BatchNorm1d(512, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv1d(512, 256, 3, stride=1, padding=1),
-            nn.BatchNorm1d(256, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            #nn.Upsample(scale_factor=2),
-            nn.Conv1d(256, 128, 3, stride=1, padding=1),
-            nn.BatchNorm1d(128, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Upsample(scale_factor=2),
-            nn.Conv1d(128, 64, 3, stride=1, padding=1),
-            nn.BatchNorm1d(64, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Upsample(scale_factor=2),
-            nn.Conv1d(64, opt.x_dim, 3, stride=1, padding=1),
-            nn.Tanh(),
-        )
+			nn.BatchNorm1d(128, 0.8),
+			nn.ConvTranspose1d(128, 256, 4, stride=2, padding=1),
+			nn.BatchNorm1d(256, 0.8),
+			nn.LeakyReLU(0.2, inplace=True),
+			#nn.ConvTranspose1d(256, 256, 4, stride=2, padding=1),
+			#nn.BatchNorm1d(256, 0.8),
+			#nn.LeakyReLU(0.2, inplace=True),
+			nn.ConvTranspose1d(256, 128, 4, stride=2, padding=1),
+			nn.BatchNorm1d(128, 0.8),
+			nn.LeakyReLU(0.2, inplace=True),
+			nn.ConvTranspose1d(128, 64, 4, stride=2, padding=1),
+			nn.BatchNorm1d(64, 0.8),
+			nn.LeakyReLU(0.2, inplace=True),
+			nn.Conv1d(64, opt.x_dim, 3, stride=1, padding=1),
+			nn.Tanh(),
+		)
+
 
 	def forward(self, noise, conditions):
 		conds_flat = conditions.view(conditions.shape[0],-1)
 		gen_input = torch.cat((conds_flat, noise), 1)
 		out = self.l1(gen_input)    
-		out = out.view(out.shape[0], 64, self.init_size)
+		out = out.view(out.shape[0], 128, self.init_size)
 		traj = self.conv_blocks(out)
 		return traj
 
@@ -103,7 +86,7 @@ class Discriminator(nn.Module):
 		super(Discriminator, self).__init__()
 
 		def discriminator_block(in_filters, out_filters, bn=False):
-			block = [nn.Conv1d(in_filters, out_filters, 3, 2, 1), nn.LeakyReLU(0.2, inplace=True), nn.Dropout(0.25)]
+			block = [nn.Conv1d(in_filters, out_filters, 3, 2, 1), nn.LeakyReLU(0.2, inplace=True)]
 			if bn:
 				block.append(nn.BatchNorm1d(out_filters, 0.8))
 			return block
@@ -112,15 +95,13 @@ class Discriminator(nn.Module):
 			*discriminator_block(opt.x_dim+opt.c_dim, 32),
 			*discriminator_block(32, 64),
 			*discriminator_block(64, 128),
-			*discriminator_block(128, 256),
-			*discriminator_block(256, 512),
-			#*discriminator_block(512, 1024),
-				
+			*discriminator_block(128, 64),
+			*discriminator_block(64, 32)             
 		)
 
 		# The height and width of downsampled image
 		ds_size = opt.traj_len // 2 ** 5
-		self.adv_layer = nn.Sequential(nn.Linear(512 * ds_size, 1))
+		self.adv_layer = nn.Sequential(nn.Linear(32 * ds_size, 1))
 		
 	def forward(self, trajs, conditions):
 		d_in = torch.cat((trajs, conditions), 1)
@@ -137,7 +118,7 @@ if DO_TRAINING:
 else:
 	ID = "__ID_HERE__"
 
-plots_path = "SE_Plots/ID_"+ID
+plots_path = "StateEstimation_Plots/ID_"+ID
 os.makedirs(plots_path, exist_ok=True)
 f = open(plots_path+"/log.txt", "w")
 f.write(str(opt))
@@ -220,10 +201,10 @@ if DO_TRAINING:
 			optimizer_D.zero_grad()
 
 			# Sample noise as generator input
-			z = Variable(Tensor(np.random.normal(0, 1, (opt.batch_size, opt.latent_dim))))
+			z_discr = Variable(Tensor(np.random.normal(0, 1, (opt.batch_size, opt.latent_dim))))
 
 			# Generate a batch of images
-			fake_trajs = generator(z, conds)
+			fake_trajs = generator(z_discr, conds)
 
 			# Real images
 			real_validity = discriminator(real_trajs, conds)
@@ -247,8 +228,9 @@ if DO_TRAINING:
 				#  Train Generator
 				# -----------------
 				gen_conds = Variable(Tensor(generate_random_conditions()))
+				z_gen = Variable(Tensor(np.random.normal(0, 1, (opt.batch_size, opt.latent_dim))))
 				# Generate a batch of images
-				gen_trajs = generator(z, gen_conds)
+				gen_trajs = generator(z_gen, gen_conds)
 
 				# Loss measures generator's ability to fool the discriminator
 				# Train on fake images

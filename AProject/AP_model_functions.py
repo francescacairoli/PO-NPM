@@ -282,7 +282,7 @@ def gen_trajectories(n_samples, t_sim, custom_disturbance_signals = [], init_sta
 	ranges = set_params()
 
 	x0, basal_iir, rest_dists = HJ_init_state(7.8, p)
-
+	print("basel insulin = ", basal_iir)
 
 	u = basal_iir*np.ones(int(t_sim))
 	dists = rest_dists*np.ones((int(t_sim),len(rest_dists)))

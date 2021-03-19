@@ -2,9 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
+
 class SpikingNeuron(object):
 
-	def __init__(self, time_horizon = 20, noise_sigma = 0.5):
+	def __init__(self, time_horizon = 4, n_steps = 32, noise_sigma = 0.5):
 		self.a = 0.02
 		self.b = 0.2
 		self.c = -65
@@ -15,6 +16,7 @@ class SpikingNeuron(object):
 		self.unsafe_region = [-np.infty, -68.5] # v
 		self.time_horizon = time_horizon
 		self.noise_sigma = noise_sigma
+		self.n_steps = n_steps
 
 	def diff_eq(self, t, y):
 
@@ -27,7 +29,7 @@ class SpikingNeuron(object):
 
 	def sample_init_state(self):
 
-		return np.random.rand(self.state_dim)*(self.ranges[:,1]-self.ranges[:,0])+self.ranges[:,0]
+		return np.random.randn(self.state_dim)*(self.ranges[:,1]-self.ranges[:,0])+self.ranges[:,0]
 
 	def jump_condition(self, t, y):
 		if y[0] >= 30:
@@ -39,16 +41,18 @@ class SpikingNeuron(object):
 	
 	def gen_trajectories(self, n_samples):
 
-		time_grid = np.arange(self.time_horizon)
-		trajectories = np.empty((n_samples, self.time_horizon, self.state_dim))
+		time_grid = np.linspace(0,self.time_horizon, self.n_steps)
+		trajectories = np.empty((n_samples, self.n_steps, self.state_dim))
 		for i in range(n_samples):
 			print("Point {}/{}".format(i+1,n_samples))
 			y0 = self.sample_init_state()
 			
-			time_grid_sol = np.zeros((self.state_dim, self.time_horizon))
-			
-			for t in range(self.time_horizon):
-				tspan = [t, t+1]
+			time_grid_sol = np.zeros((self.state_dim, self.n_steps))
+			dt = self.time_horizon/self.n_steps
+
+			count, t = 0, 0
+			while count < self.n_steps:
+				tspan = [t, t+dt]
 				sol = solve_ivp(self.diff_eq, tspan, y0, events = self.jump_condition)
 				if t == 0:
 					global_sol = sol.y
@@ -57,16 +61,18 @@ class SpikingNeuron(object):
 				else:
 					global_sol = np.hstack((global_sol, sol.y[:,1:]))
 					global_t = np.hstack((global_t, sol.t[1:]))
-					time_grid_sol[:,t] = y0
+					time_grid_sol[:,count] = y0
 
 
 				while len(sol.t_events[0]) > 0:
-					new_tspan = [sol.t_events[0], t+1]
+					new_tspan = [sol.t_events[0], t+dt]
 					new_y0 = np.array([self.c, self.d+sol.y_events[0][0,1]])
 					sol = solve_ivp(self.diff_eq, new_tspan, new_y0, events = self.jump_condition)
 					global_sol = np.hstack((global_sol, sol.y[:, 1:]))
 					global_t = np.hstack((global_t, sol.t[1:]))
 				y0 = global_sol[:,-1]
+				count += 1
+				t += dt
 
 			trajectories[i] = time_grid_sol.T
 
@@ -91,7 +97,8 @@ class SpikingNeuron(object):
 
 		for i in range(n_states):
 			tspan = [0, future_horizon]
-			y0 = self.sample_init_state()
+			#y0 = self.sample_init_state() # ERRORE!! il primos tato iniziale non è random
+			y0 = states[i]
 			sol = solve_ivp(self.diff_eq, tspan, y0, events = self.jump_condition)
 			
 			global_sol = sol.y

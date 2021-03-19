@@ -4,15 +4,11 @@ import sys
 
 import pickle
 
-class InvertedPendulumDataset(object):
-    def __init__(self):
-        #self.trainset_fn = "Datasets/dataset_20000points_pastH=4_futureH=1_32steps_noise_sigma=1.pickle"
-        #self.test_fn = "Datasets/dataset_10000points_pastH=4_futureH=1_32steps_noise_sigma=1.pickle"
-        #self.validation_fn = "Datasets/dataset_50points_pastH=4_futureH=1_32steps_noise_sigma=1.pickle"
-        self.trainset_fn = "Datasets/dataset_20000points_pastH=5_futureH=5_32steps_noise_sigma=1.pickle"
-        self.test_fn = "Datasets/dataset_10000points_pastH=5_futureH=5_32steps_noise_sigma=1.pickle"
-        self.validation_fn = "Datasets/dataset_50points_pastH=5_futureH=5_32steps_noise_sigma=1.pickle"
-        
+class InvertedPendulumDataset_w_SE(object):
+    def __init__(self, se_id):
+        self.trainset_fn = "Datasets/dataset_se_id={}_20000points_pastH=4_futureH=1_32steps_noise_sigma=1.pickle".format(se_id)
+        self.test_fn = "Datasets/dataset_se_id={}_10000points_pastH=4_futureH=1_32steps_noise_sigma=1.pickle".format(se_id)
+        self.validation_fn = "Datasets/dataset_se_id={}_50points_pastH=4_futureH=1_32steps_noise_sigma=1.pickle".format(se_id)
         self.x_dim = 2
         self.y_dim = 1
         self.traj_len = 32
@@ -23,26 +19,18 @@ class InvertedPendulumDataset(object):
         data = pickle.load(file)
         file.close()
 
-        X = data["x"]
-        Y = np.expand_dims(data["y"], axis=1)
+        X = data["x_hat"]
+        Y = data["y"]
 
 
         print("DATASET SHAPES: ", X.shape, Y.shape)
 
-        if True:
-            xmax = np.max(np.max(X, axis = 0), axis = 0)
-            ymax = np.max(np.max(Y, axis = 0), axis = 0)
-            self.HMAX = (xmax, ymax)
-            xmin = np.min(np.min(X, axis = 0), axis = 0)
-            ymin = np.min(np.min(Y, axis = 0), axis = 0)
-            self.HMIN = (xmin, ymin)
-        else:
-            xmax = np.max(X, axis = 0)
-            ymax = np.max(Y, axis = 0)
-            self.HMAX = (xmax, ymax)
-            xmin = np.min(X, axis = 0)
-            ymin = np.min(Y, axis = 0)
-            self.HMIN = (xmin, ymin)
+        xmax = np.max(X, axis = 0)
+        ymax = np.max(Y, axis = 0)
+        self.HMAX = (xmax, ymax)
+        xmin = np.min(X, axis = 0)
+        ymin = np.min(Y, axis = 0)
+        self.HMIN = (xmin, ymin)
 
         self.X_train_transp = -1+2*(X-self.HMIN[0])/(self.HMAX[0]-self.HMIN[0])
         self.Y_train_transp = -1+2*(Y-self.HMIN[1])/(self.HMAX[1]-self.HMIN[1])
@@ -63,8 +51,8 @@ class InvertedPendulumDataset(object):
         data = pickle.load(file)
         file.close()
 
-        X = data["x"]
-        Y = np.expand_dims(data["y"], axis=1)
+        X = data["x_hat"]
+        Y = data["y"]
         print("DATASET SHAPES: ", X.shape, Y.shape)
 
         self.X_test_transp = -1+2*(X-self.HMIN[0])/(self.HMAX[0]-self.HMIN[0])
@@ -85,8 +73,8 @@ class InvertedPendulumDataset(object):
         data = pickle.load(file)
         file.close()
 
-        X = data["x"]
-        Y = np.expand_dims(data["y"], axis=1)
+        X = data["x_hat"]
+        Y = data["y"]
         print("DATASET SHAPES: ", X.shape, Y.shape)
 
         self.X_val_transp = -1+2*(X-self.HMIN[0])/(self.HMAX[0]-self.HMIN[0])
@@ -106,7 +94,7 @@ class InvertedPendulumDataset(object):
         
         ix = np.random.randint(0, self.X_train_transp.shape[0], n_samples)
         Xb = self.X_train_transp[ix]
-        Yb = self.Y_train_transp[ix]
+        #Yb = self.Y_train_transp[ix]
         Lb = self.L_train[ix]
 
-        return Xb, Yb, Lb
+        return Xb, Lb

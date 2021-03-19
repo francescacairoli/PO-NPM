@@ -45,7 +45,7 @@ class InvertedPendulum(object):
 		i = 0
 		while i < n_samples:
 			print("Point {}/{}".format(i+1,n_samples))
-			y0 = self.ranges[:,0]+(self.ranges[:,1]-self.ranges[:,0])*np.random.rand(self.state_dim)
+			y0 = self.ranges[:,0]+(self.ranges[:,1]-self.ranges[:,0])*np.random.randn(self.state_dim)
 			yy = odeint(self.diff_eq, y0, tspan)
 			trajs[i] = yy.T
 			i += 1

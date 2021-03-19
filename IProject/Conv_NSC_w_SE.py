@@ -20,7 +20,7 @@ import pickle
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 22})
 
-from InvertedPendulumDataset import *
+from InvertedPendulumDataset_w_SE import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_epochs", type=int, default=200, help="number of epochs of training")
@@ -88,7 +88,7 @@ class NSC(nn.Module):
 
 if __name__ == "__main__":
 		
-	ds = InvertedPendulumDataset()
+	ds = InvertedPendulumDataset_w_SE("41849")
 	ds.load_train_data()
 	nsc = NSC()
 	if cuda:
@@ -109,7 +109,7 @@ if __name__ == "__main__":
 	else:
 		ID = "99389"
 
-	plots_path = "NSC_Plots/ID_"+ID
+	plots_path = "NSC_w_SE_Plots/ID_"+ID
 	os.makedirs(plots_path, exist_ok=True)
 	f = open(plots_path+"/log.txt", "w")
 	f.write(str(opt))
@@ -149,7 +149,7 @@ if __name__ == "__main__":
 			for i in range(n_steps):
 				
 				# Select a minibatch
-				X, _, T = ds.generate_mini_batches(opt.batch_size)
+				X, T = ds.generate_mini_batches(opt.batch_size)
 				# initialization of the gradients
 				
 				Xt = Variable(FloatTensor(X))
@@ -199,3 +199,5 @@ if __name__ == "__main__":
 	Ttest = Variable(OutputTensor(ds.L_test))
 	test_preds = nsc(Xtest)
 	print("Test accuracy: ", compute_accuracy(Ttest, test_preds))
+
+#to be tested as well

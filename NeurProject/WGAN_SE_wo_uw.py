@@ -59,6 +59,7 @@ class WGAN_SE_wo_uw(object):
 		self.n_critic = 1
 		self.n_gen = 1
 		self.HMAX = np.zeros(2)
+		self.HMIN = np.zeros(2)
 		self.clip_const = 0.01
 		self.c_lr = 0.00005
 		self.g_lr = 0.00005
@@ -113,11 +114,6 @@ class WGAN_SE_wo_uw(object):
 		x = LeakyReLU(alpha=0.2)(x)
 
 		
-		x = Conv1D(HC[1], KC[1], strides=SC[1], padding='same', kernel_constraint=const)(x)
-		x = BatchNormalization()(x)
-		x = LeakyReLU(alpha=0.2)(x)
-
-		
 		# scoring, linear activation
 		x = Flatten()(x)
 		outputs = Dense(1)(x)
@@ -156,17 +152,17 @@ class WGAN_SE_wo_uw(object):
 		x = Conv1D(HG[1], KG[1], padding = "same")(x)
 		x = BatchNormalization()(x)
 		x = LeakyReLU(alpha=0.2)(x)
-
+		'''
 		# upsample to 4*Q = 16
 		x = Conv1D(HG[4], KG[4], padding = "same")(x)
 		x = BatchNormalization()(x)
 		x = LeakyReLU(alpha=0.2)(x)
-		
+		'''
 		# upsample to 8*Q = 32
 		x = Conv1D(HG[2], KG[2], padding = "same")(x)
 		x = BatchNormalization()(x)
 		x = LeakyReLU(alpha=0.2)(x)
-
+		
 		x = Conv1D(HG[3], KG[3], padding = "same")(x)
 		x = BatchNormalization()(x)
 		x = LeakyReLU(alpha=0.2)(x)
@@ -224,13 +220,16 @@ class WGAN_SE_wo_uw(object):
 
 		self.n_points_dataset = X.shape[0]
 		# scale to [-1,1]
-		xmax = np.max(np.max(X, axis = 0),axis = 0)/2
-		ymax = np.max(np.max(Y, axis = 0),axis = 0)/2
+		xmax = np.max(X, axis = 0)
+		ymax = np.max(Y, axis = 0)
 		self.HMAX = (xmax, ymax)
+		xmin = np.min(X, axis = 0)
+		ymin = np.min(Y, axis = 0)
+		self.HMIN = (xmin, ymin)
 
 
-		self.X_train = (X-self.HMAX[0])/self.HMAX[0]
-		self.Y_train = (Y-self.HMAX[1])/self.HMAX[1]
+		self.X_train = -1+2*(X-self.HMIN[0])/(self.HMAX[0]-self.HMIN[0])
+		self.Y_train = -1+2*(Y-self.HMIN[1])/(self.HMAX[1]-self.HMIN[1])
 
 		self.n_points_dataset = self.X_train.shape[0]
 
@@ -242,9 +241,9 @@ class WGAN_SE_wo_uw(object):
 		# close the file
 		file.close()
 
-		self.X_val = (val_data["x"]-self.HMAX[0])/self.HMAX[0]
+		self.X_val = -1+(val_data["x"]-self.HMIN[0])/(self.HMAX[0]-self.HMIN[0])
 		yval = np.expand_dims(val_data["y"],axis=2)
-		self.Y_val = (yval-self.HMAX[1])/self.HMAX[1]
+		self.Y_val = -1+(yval-self.HMIN[1])/(self.HMAX[1]-self.HMIN[1])
 		
 	## TODO: DATA MUST BE SCALED BTW [-1,1]
 
@@ -407,14 +406,14 @@ class WGAN_SE_wo_uw(object):
 	def plot_validation_trajectories(self):
 		import seaborn as sns
 		n_val_points, traj_per_state, n_timesteps, x_dim = self.gen_trajectories.shape
-		gen_trajectories_unscaled = (self.gen_trajectories+1)*self.HMAX[0]
-		sim_trajectories_unscaled = (self.X_val+1)*self.HMAX[0]
+
+		gen_trajectories_unscaled = self.HMIN[0]+(self.gen_trajectories+1)*(self.HMAX[0]-self.HMIN[0])/2
+		sim_trajectories_unscaled = self.HMIN[0]+(self.X_val+1)*(self.HMAX[0]-self.HMIN[0])/2
 		
 
 		sp = 0
 		tspan = range(n_timesteps)
 		for j in range(n_val_points):
-			#print("xxxxxxxxxxxxxxxxxxxxxxxxxx", gen_trajectories_unscaled[j,0,:,0].shape, sim_trajectories_unscaled[j,:,0].shape)
 			fig, axs = pyplot.subplots(2)
 
 			axs[0].plot(tspan, sim_trajectories_unscaled[j,:,0], color="blue")
@@ -432,8 +431,8 @@ class WGAN_SE_wo_uw(object):
 		
 		n_val_points, n_gen_trajs, n_steps, x_dim = self.gen_trajectories.shape
 
-		gen_trajectories_unscaled = (self.gen_trajectories+1)*self.HMAX[0]
-		sim_trajectories_unscaled = (self.X_val+1)*self.HMAX[0]
+		gen_trajectories_unscaled = self.HMIN[0]+(self.gen_trajectories+1)*(self.HMAX[0]-self.HMIN[0])/2
+		sim_trajectories_unscaled = self.HMIN[0]+(self.X_val+1)*(self.HMAX[0]-self.HMIN[0])/2
 		
 		colors = ['blue', 'orange']
 		leg = ['real', 'gen']

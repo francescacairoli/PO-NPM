@@ -75,8 +75,7 @@ class NSC(nn.Module):
 		
 		self.fc2 = nn.Linear(100, opt.output_dim, bias=True)
 		nn.init.xavier_uniform_(self.fc2.weight) # initialize parameters
-		self.layer6 = nn.Sequential(self.fc2,
-				   nn.Sigmoid())
+		self.layer6 = nn.Sequential(self.fc2)
 
 	def forward(self, x):
 		out = self.layer1(x)
