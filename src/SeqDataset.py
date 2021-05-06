@@ -7,7 +7,10 @@ class SeqDataset():
 		self.trainset_fn = trainset_fn
 		self.testset_fn = testset_fn
 		self.validset_fn = validset_fn
-		
+
+	def add_calibration_path(self, calibrset_fn):
+		self.calibrset_fn = calibrset_fn
+
 	def load_data(self):
 		self.load_train_data()
 		self.load_test_data()
@@ -30,9 +33,15 @@ class SeqDataset():
 		
 		xmax = np.max(np.max(self.X_train, axis = 0), axis = 0)
 		ymax = np.max(np.max(self.Y_train, axis = 0), axis = 0)
+		#xmax = 7*np.ones(3)
+		#ymax = 7*np.ones(3)
 		self.MAX = (xmax, ymax)
-		xmin = np.min(self.X_train, axis = 0)
+
+		xmin = np.min(np.min(self.X_train, axis = 0), axis = 0)
 		ymin = np.min(np.min(self.Y_train, axis = 0), axis = 0)
+		
+		#xmin = np.zeros(3)
+		#ymin = np.zeros(3)
 		self.MIN = (xmin, ymin)
 
 		self.X_train_scaled = -1+2*(self.X_train-self.MIN[0])/(self.MAX[0]-self.MIN[0])
@@ -102,6 +111,32 @@ class SeqDataset():
 			self.T_val[i, int(labels[i])] = 1
 		self.L_val = labels	
 
+
+	def load_calibration_data(self):
+
+		file = open(self.calibrset_fn, 'rb')
+		data = pickle.load(file)
+		file.close()
+
+		X = data["x"]
+		Y = data["y"]
+		labels = data["cat_labels"]
+
+		self.n_cal_points = X.shape[0]
+
+		self.X_cal = X
+		self.Y_cal = Y
+		
+		self.X_cal_scaled = -1+2*(self.X_cal-self.MIN[0])/(self.MAX[0]-self.MIN[0])
+		self.Y_cal_scaled = -1+2*(self.Y_cal-self.MIN[1])/(self.MAX[1]-self.MIN[1])
+		
+		self.X_cal_scaled_flat = np.reshape(self.X_cal_scaled, (self.n_cal_points, self.x_dim*self.traj_len))
+		self.Y_cal_scaled_flat = np.reshape(self.Y_cal_scaled, (self.n_cal_points, self.y_dim*self.traj_len))
+
+		self.T_cal = np.zeros((self.n_cal_points, 2))
+		for i in range(self.n_cal_points):
+			self.T_cal[i, int(labels[i])] = 1
+		self.L_cal = labels	
 		
 	def generate_mini_batches(self, n_samples):
 		

@@ -1,7 +1,7 @@
 import pickle
 import numpy as np
 
-model_name = "AP"
+model_name = "TWT"
 trainset_fn = "Datasets/"+model_name+"_training_set_20K.pickle"
 testset_fn = "Datasets/"+model_name+"_test_set_10K.pickle"
 validset_fn = "Datasets/"+model_name+"_validation_set_50.pickle"
