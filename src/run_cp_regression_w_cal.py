@@ -6,7 +6,8 @@ from torch.autograd import Variable
 cuda = True if torch.cuda.is_available() else False
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
-model_name = "IP"
+model_name = "SN"
+print("Model: ", model_name)
 trainset_fn = "Datasets/"+model_name+"_training_set_20K.pickle"
 testset_fn = "Datasets/"+model_name+"_test_set_10K.pickle"
 validset_fn = "Datasets/"+model_name+"_validation_set_50.pickle"
@@ -16,18 +17,18 @@ calibrset_fn = "Datasets/"+model_name+"_calibration_set_8500.pickle"
 net_type = "Conv"
 
 if model_name == "SN":
-	nsc_info = ("38653", 500)
+	net_info = ("38653", 500)
 if model_name == "IP":
-	nsc_info = ("62715", 200)
+	net_info = ("62715", 200)
 if model_name == "AP":
-	nsc_info = ("66287", 200)
+	net_info = ("66287", 200)
 if model_name == "HC":
-	nsc_info = ("2775", 200)	
+	net_info = ("2775", 200)	
 if model_name == "TWT":
-	nsc_info = ("25056", 200)
+	net_info = ("13560", 200)
 	
-n_epochs = nsc_info[1]
-net_idx = nsc_info[0]
+n_epochs = net_info[1]
+net_idx = net_info[0]
 results_path = model_name+"/"+net_type+"_SeqSE_results/ID_"+net_idx
 net_path = results_path+"/seq_state_estimator_{}epochs.pt".format(n_epochs)
 
@@ -52,7 +53,11 @@ cp = ICP_Regression(Xc = input_cal, Yc = output_cal, trained_model = net_fnc)
 
 eps = 0.05
 
+
 coverage = cp.get_coverage(eps, input_test, output_test)
-print("1D-Coverage for significance = ", 1-eps, ": ", coverage)
+efficiency = cp.get_efficiency(box_flag = False)
+print("1D-Coverage for significance = ", 1-eps, ": ", coverage, "; Efficiency = ", efficiency)
+
 box_coverage = cp.get_box_coverage(eps, input_test, output_test)
-print("Box-Coverage for significance = ", 1-eps, ": ", box_coverage)
+box_efficiency = cp.get_efficiency(box_flag = True)
+print("Box-Coverage for significance = ", 1-eps, ": ", box_coverage, "; Box Efficiency = ", box_efficiency)

@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.random import rand
 import scipy.special
+import scipy.spatial
 
 class ICP_Regression():
 	'''
@@ -74,11 +75,11 @@ class ICP_Regression():
 		test_scores = self.get_nonconformity_scores(y_test, y_test_pred)
 		n_points = len(y_test)
 
-		tau = self.get_alpha_threshold(epsilon)
+		self.tau = self.get_alpha_threshold(epsilon)
 
 		c = 0
 		for i in range(n_points):
-			if test_scores[i] < tau:
+			if test_scores[i] < self.tau:
 				c += 1
 		coverage = c/n_points
 
@@ -98,6 +99,7 @@ class ICP_Regression():
 		n_points = len(y_test)
 
 		n_tau = self.get_1d_alpha_thresholds(epsilon)
+		self.box_tau = n_tau
 
 		c = 0
 		for i in range(n_points):
@@ -107,5 +109,15 @@ class ICP_Regression():
 
 		return coverage
 
+
+	def get_efficiency(self, box_flag):
+
+		if box_flag:
+			pred_rectangle = scipy.spatial.Rectangle(self.box_tau, -1*self.box_tau)
+			eff = pred_rectangle.volume()
+		else:
+			eff = 2*self.tau # width of the 1d tube
+
+		return eff
 
 	
