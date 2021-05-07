@@ -33,15 +33,12 @@ class SeqDataset():
 		
 		xmax = np.max(np.max(self.X_train, axis = 0), axis = 0)
 		ymax = np.max(np.max(self.Y_train, axis = 0), axis = 0)
-		#xmax = 7*np.ones(3)
-		#ymax = 7*np.ones(3)
+
 		self.MAX = (xmax, ymax)
 
 		xmin = np.min(np.min(self.X_train, axis = 0), axis = 0)
 		ymin = np.min(np.min(self.Y_train, axis = 0), axis = 0)
 		
-		#xmin = np.zeros(3)
-		#ymin = np.zeros(3)
 		self.MIN = (xmin, ymin)
 
 		self.X_train_scaled = -1+2*(self.X_train-self.MIN[0])/(self.MAX[0]-self.MIN[0])

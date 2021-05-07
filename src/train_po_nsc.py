@@ -11,13 +11,15 @@ FloatTensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 LongTensor = torch.cuda.LongTensor if cuda else torch.LongTensor
 
 class Train_PO_NSC():
-	def __init__(self, model_name, dataset, net_type = "FF", training_flag = True, idx = None):
+	def __init__(self, model_name, dataset, net_type = "FF", training_flag = True, idx = None, nb_filters = 64):
 		
 		self.model_name = model_name
 		self.dataset = dataset
 		self.net_type = net_type
 		self.idx = idx
 		self.training_flag = training_flag
+		self.nb_filters = nb_filters
+
 		if self.idx:
 			self.results_path = self.model_name+"/"+self.net_type+"_NSC_resuts/ID_"+self.idx
 		
@@ -46,7 +48,7 @@ class Train_PO_NSC():
 		if self.net_type == "FF":
 			self.po_nsc = FF_PO_NSC(input_size = int(self.dataset.y_dim*self.dataset.traj_len))
 		else:
-			self.po_nsc = Conv_PO_NSC(int(self.dataset.y_dim), int(self.dataset.traj_len))
+			self.po_nsc = Conv_PO_NSC(int(self.dataset.y_dim), int(self.dataset.traj_len), n_filters = self.nb_filters)
 
 		if cuda:
 			self.po_nsc.cuda()
@@ -69,18 +71,18 @@ class Train_PO_NSC():
 		n_steps = bat_per_epo * n_epochs
 
 		if self.net_type == "FF":
-			Xval_t = Variable(FloatTensor(self.dataset.X_val_scaled_flat))
+			#Xval_t = Variable(FloatTensor(self.dataset.X_val_scaled_flat))
 			Yval_t = Variable(FloatTensor(self.dataset.X_val_scaled_flat))
 		else:
-			Xv = np.transpose(self.dataset.X_val_scaled, (0,2,1))
+			#Xv = np.transpose(self.dataset.X_val_scaled, (0,2,1))
 			Yv = np.transpose(self.dataset.Y_val_scaled, (0,2,1))
-			Xval_t = Variable(FloatTensor(Xv))
+			#Xval_t = Variable(FloatTensor(Xv))
 			Yval_t = Variable(FloatTensor(Yv))
 
 		Tval_t = Variable(LongTensor(self.dataset.L_val))
 		
 		for epoch in range(n_epochs):
-			print("Epoch nb. ", epoch+1, "/", n_epochs)
+			#print("Epoch nb. ", epoch+1, "/", n_epochs)
 			tmp_acc = []
 			tmp_loss = []
 			for i in range(bat_per_epo):
@@ -112,9 +114,9 @@ class Train_PO_NSC():
 				# Print some performance to monitor the training
 				tmp_acc.append(self.compute_accuracy(Tt, hypothesis))
 				tmp_loss.append(loss.item())   
-				if i % 200 == 0:
-					print("Epoch= {},\t batch = {},\t loss = {:2.4f},\t accuracy = {}".format(epoch+1, i, tmp_loss[-1], tmp_acc[-1]))
-			
+			if epoch % 50 == 0:
+				print("Epoch= {},\t loss = {:2.4f},\t accuracy = {}".format(epoch+1, tmp_loss[-1], tmp_acc[-1]))
+		
 			val_hypothesis = self.po_nsc(Yval_t)
 			val_loss = loss_fnc(val_hypothesis, Tval_t)
 			losses.append(np.mean(tmp_loss))
@@ -125,6 +127,7 @@ class Train_PO_NSC():
 		fig_loss = plt.figure()
 		plt.plot(np.arange(n_epochs), losses, label="train")
 		plt.plot(np.arange(n_epochs), val_losses, label="valid")
+		plt.legend()
 		plt.tight_layout()
 		plt.title("loss")
 		fig_loss.savefig(self.results_path+"/losses_{}epochs.png".format(self.n_epochs))
@@ -133,6 +136,7 @@ class Train_PO_NSC():
 		fig_acc = plt.figure()
 		plt.plot(np.arange(n_epochs), accuracies, label="train")
 		plt.plot(np.arange(n_epochs), val_accuracies, label="valid")
+		plt.legend()
 		plt.tight_layout()
 		plt.title("accuracy")
 		fig_acc.savefig(self.results_path+"/accuracies_{}epochs.png".format(self.n_epochs))

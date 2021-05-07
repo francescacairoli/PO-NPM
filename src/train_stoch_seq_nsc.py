@@ -5,6 +5,7 @@ import os
 import pickle
 from torch.autograd import Variable
 import matplotlib.pyplot as plt
+plt.rcParams.update({'font.size': 22})
 
 cuda = True if torch.cuda.is_available() else False
 FloatTensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
@@ -81,8 +82,8 @@ class Train_StochSeqNSC():
 		optimizer_nsc = torch.optim.Adam(self.seq_nsc.parameters(), lr=lr)#, betas=(opt.b1, opt.b2)
 		optimizer_se = torch.optim.Adam(self.seq_se.parameters(), lr=lr)#, betas=(opt.b1, opt.b2)
 
-		self.seq_nsc_net_path = self.results_path+"/comb_seq_nsc_{}epochs.pt".format(n_epochs)
-		self.seq_se_net_path = self.results_path+"/comb_seq_se_{}epochs.pt".format(n_epochs)
+		self.seq_nsc_net_path = self.results_path+"/seq_nsc_{}epochs.pt".format(n_epochs)
+		self.seq_se_net_path = self.results_path+"/seq_se_{}epochs.pt".format(n_epochs)
 
 		w = 0.5
 		
@@ -106,7 +107,7 @@ class Train_StochSeqNSC():
 		Tval_t = Variable(LongTensor(self.seq_dataset.L_val))
 
 		for epoch in range(n_epochs):
-			print("Epoch nb. ", epoch+1, "/", n_epochs)
+			
 			tmp_acc = []
 			tmp_loss = []
 
@@ -164,9 +165,9 @@ class Train_StochSeqNSC():
 				tmp_acc.append(self.compute_accuracy(T2t, label_hypothesis2))
 				tmp_loss.append(comb_loss_fnc2.item())   
 				
-				if i % 50 == 0:
-					print("Epoch= {},\t batch = {},\t loss = {:2.4f},\t accuracy = {}".format(epoch+1, i, tmp_loss[-1], tmp_acc[-1]))
-			
+			if epoch % 50 == 0:
+				print("Epoch= {},\t loss = {:2.4f},\t accuracy = {}".format(epoch+1, tmp_loss[-1], tmp_acc[-1]))
+		
 			val_state_estim = self.seq_se(Yval_t)
 			val_label_hypothesis = self.seq_nsc(val_state_estim)
 			val_comb_loss_fnc = w*nsc_loss_fnc(val_label_hypothesis, Tval_t)+(1-w)*se_loss_fnc(val_state_estim, Xval_t)
@@ -191,6 +192,7 @@ class Train_StochSeqNSC():
 		fig_acc = plt.figure()
 		plt.plot(np.arange(n_epochs), accuracies, label="train")
 		plt.plot(np.arange(n_epochs), val_accuracies, label="valid")
+		plt.legend()
 		plt.tight_layout()
 		plt.title("comb accuracy")
 		fig_acc.savefig(self.results_path+"/comb_accuracies_{}epochs.png".format(self.n_epochs))

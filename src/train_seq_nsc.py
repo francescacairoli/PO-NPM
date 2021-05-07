@@ -9,16 +9,17 @@ plt.rcParams.update({'font.size': 22})
 cuda = True if torch.cuda.is_available() else False
 FloatTensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 LongTensor = torch.cuda.LongTensor if cuda else torch.LongTensor
-from torchsummary import summary
+
 
 class Train_SeqNSC():
-	def __init__(self, model_name, seq_dataset, net_type = "FF", training_flag = True, idx = None):
+	def __init__(self, model_name, seq_dataset, net_type = "FF", training_flag = True, idx = None, nb_filters = 64):
 		
 		self.model_name = model_name
 		self.seq_dataset = seq_dataset
 		self.net_type = net_type
 		self.idx = idx
 		self.training_flag = training_flag
+		self.nb_filters = nb_filters
 		if self.idx:
 			self.results_path = self.model_name+"/"+self.net_type+"_SeqNSC_resuts/ID_"+self.idx
 		
@@ -48,7 +49,7 @@ class Train_SeqNSC():
 			self.seq_nsc = FF_SeqNSC(input_size = int(self.seq_dataset.x_dim*self.seq_dataset.traj_len))
 		else:
 
-			self.seq_nsc = Conv_SeqNSC(x_dim = int(self.seq_dataset.x_dim), traj_len = int(self.seq_dataset.traj_len))
+			self.seq_nsc = Conv_SeqNSC(x_dim = int(self.seq_dataset.x_dim), traj_len = int(self.seq_dataset.traj_len), nb_filters = self.nb_filters)
 
 		if cuda:
 			self.seq_nsc.cuda()
@@ -81,7 +82,7 @@ class Train_SeqNSC():
 		Tval_t = Variable(LongTensor(self.seq_dataset.L_val))
 
 		for epoch in range(n_epochs):
-			print("Epoch nb. ", epoch+1, "/", n_epochs)
+			
 			tmp_acc = []
 			tmp_loss = []
 			for i in range(bat_per_epo):
@@ -113,9 +114,10 @@ class Train_SeqNSC():
 				# Print some performance to monitor the training
 				tmp_acc.append(self.compute_accuracy(Tt, hypothesis))
 				tmp_loss.append(loss.item())   
-				if i % 200 == 0:
-					print("Epoch= {},\t batch = {},\t loss = {:2.4f},\t accuracy = {}".format(epoch+1, i, tmp_loss[-1], tmp_acc[-1]))
 			
+			if epoch % 50 == 0:
+				print("Epoch= {},\t loss = {:2.4f},\t accuracy = {}".format(epoch+1, tmp_loss[-1], tmp_acc[-1]))
+				
 			val_hypothesis = self.seq_nsc(Xval_t)
 			val_loss = loss_fnc(val_hypothesis, Tval_t)
 			val_losses.append(val_loss.item())

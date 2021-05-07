@@ -44,23 +44,23 @@ class Conv_SeqSE(nn.Module):
 		self.keep_prob = 0.9
 		
 		self.layer1 = nn.Sequential(
-			nn.Conv1d(input_size, nb_filters, kernel_size=3, stride=1, padding=1),
+			nn.Conv1d(input_size, nb_filters, kernel_size=5, stride=1, padding=2),
 			nn.LeakyReLU(),
 			nn.Dropout(p=1 - self.keep_prob))
 		self.layer2 = torch.nn.Sequential(
-			nn.Conv1d(nb_filters, nb_filters, kernel_size=3, stride=1, padding=1),
+			nn.Conv1d(nb_filters, nb_filters, kernel_size=5, stride=1, padding=2),
 			nn.LeakyReLU(),
 			nn.Dropout(p=1 - self.keep_prob))
 		self.layer3 = torch.nn.Sequential(
-			nn.Conv1d(nb_filters, nb_filters, kernel_size=3, stride=1, padding=1),
+			nn.Conv1d(nb_filters, nb_filters, kernel_size=5, stride=1, padding=2),
 			nn.LeakyReLU(),
 			nn.Dropout(p=1 - self.keep_prob))
 		self.layer4 = torch.nn.Sequential(
-			nn.Conv1d(nb_filters, nb_filters, kernel_size=3, stride=1, padding=1),
+			nn.Conv1d(nb_filters, nb_filters, kernel_size=5, stride=1, padding=2),
 			nn.LeakyReLU(),
 			nn.Dropout(p=1 - self.keep_prob))
 		self.layer5 = torch.nn.Sequential(
-			nn.Conv1d(nb_filters, output_size, kernel_size=3, stride=1, padding=1),
+			nn.Conv1d(nb_filters, output_size, kernel_size=5, stride=1, padding=2),
 			nn.Tanh())
 
 		

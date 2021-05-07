@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.random import rand
 import scipy.special
+import copy
 
 class ICP_Classification():
 	'''
@@ -25,8 +26,9 @@ class ICP_Classification():
 		self.pos_label = 1
 		self.neg_label = 0 
 		self.mondrian_flag = mondrian_flag 
-		self.trained_model = trained_model 
-		self.calibr_scores = self.get_nonconformity_scores(Yc,trained_model(Xc)) # nonconformity scores on the calibration set
+		self.trained_model = trained_model
+		self.cal_pred_lkh = trained_model(Xc)
+		self.calibr_scores = self.get_nonconformity_scores(Yc,self.cal_pred_lkh) # nonconformity scores on the calibration set
 		self.q = len(Yc) # number of points in the calibration set
 
 
@@ -116,6 +118,11 @@ class ICP_Classification():
 				confidence_credibility[i,1] = p_neg[i]
 		return confidence_credibility
 
+	def compute_confidence_credibility(self, x):
+		p_pos, p_neg = self.get_p_values(x)
+
+		return self.get_confidence_credibility(p_pos, p_neg)
+
 
 	def get_prediction_region(self, epsilon, p_pos, p_neg):
 		# INPUTS: p_pos and p_neg are the outputs returned by the function get_p_values
@@ -147,6 +154,70 @@ class ICP_Classification():
 
 		return coverage
 
+	def compute_coverage(self, eps, inputs, outputs):
+		p1, p0 = self.get_p_values(x = inputs)
+
+		pred_region = self.get_prediction_region(epsilon = eps, p_pos = p1, p_neg = p0)
+
+		return self.get_coverage(pred_region, outputs)
 
 
-	
+
+	def  compute_cross_confidence_credibility(self):
+		'''
+		alphas: non conformity measures sorted in descending order
+		cal_pred_lkhs: prediction likelihood fro the twoclasses on points of the calibration set 
+
+		return: 2-dim array containing values of confidence and credibility (which are not exactly the p-values)
+				shape = (n_points,2) -- CROSS VALIDATION STRATEGY
+				first column: confidence (1-smallest p-value)
+		# 		second column: credibility (largest p-value)
+		'''
+		
+		A_pos = self.get_nonconformity_scores(self.pos_label*np.ones(self.q), self.cal_pred_lkh, sorting = False)
+		A_neg = self.get_nonconformity_scores(self.neg_label*np.ones(self.q), self.cal_pred_lkh, sorting = False)
+
+		p_pos = np.zeros(self.q) # p_values for class 1
+		p_neg = np.zeros(self.q) # p_values for class 0
+
+		pos_counter = 0
+		neg_counter = 0
+				
+		for k in range(self.q):
+			alphas_mask = copy.deepcopy(self.calibr_scores)
+			alphas_mask = np.delete(alphas_mask,k)
+			c_pos_1 = 0
+			c_pos_2 = 0
+			c_neg_1 = 0
+			c_neg_2 = 0
+			for count_pos in range(self.q-1):
+				if alphas_mask[count_pos] > A_pos[k]:
+					c_pos_1 += 1
+				elif alphas_mask[count_pos] == A_pos[k]:
+					c_pos_2 += 1
+				else:
+					break
+
+			for count_neg in range(self.q-1):
+				if alphas_mask[count_neg] > A_neg[k]:
+					c_neg_1 += 1
+				elif alphas_mask[count_neg] == A_neg[k]:
+					c_neg_2 += 1
+				else:
+					break
+			
+			p_pos[k] = (c_pos_1 + rand()*(c_pos_2+1) )/self.q
+			p_neg[k] = (c_neg_1 + rand()*(c_neg_2+1) )/self.q
+
+		confidence_credibility = np.zeros((self.q,2))
+		for i in range(self.q):
+			if p_pos[i] > p_neg[i]:
+				confidence_credibility[i,0] = 1-p_neg[i]
+				confidence_credibility[i,1] = p_pos[i]
+			else:
+				confidence_credibility[i,0] = 1-p_pos[i]
+				confidence_credibility[i,1] = p_neg[i]
+				
+		self.cal_conf_cred = confidence_credibility
+
+		return confidence_credibility

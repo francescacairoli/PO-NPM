@@ -33,11 +33,12 @@ class Train_SeqSE():
 		self.net_path = self.results_path+"/seq_state_estimator_{}epochs.pt".format(n_epochs)
 		
 		self.seq_dataset.load_data()
-		
+		self.n_epochs = n_epochs
+
 		if self.net_type == "FF":
 			self.seq_se = FF_SeqSE(int(self.seq_dataset.y_dim*self.seq_dataset.traj_len), int(n_hidden), int(self.seq_dataset.x_dim*self.seq_dataset.traj_len))
 		else:
-			self.seq_se = Conv_SeqSE(int(self.seq_dataset.y_dim), 64, int(self.seq_dataset.x_dim))
+			self.seq_se = Conv_SeqSE(int(self.seq_dataset.y_dim), 256, int(self.seq_dataset.x_dim))
 
 		if cuda:
 			self.seq_se.cuda()
@@ -49,11 +50,22 @@ class Train_SeqSE():
 		if self.training_flag:
 
 			losses = []
+			val_losses = []
 			bat_per_epo = int(self.seq_dataset.n_training_points / batch_size)
 			n_steps = bat_per_epo * n_epochs
 			
+			if self.net_type == "FF":
+				Xval_t = Variable(Tensor(self.seq_dataset.X_val_scaled_flat))
+				Yval_t = Variable(Tensor(self.seq_dataset.X_val_scaled_flat))
+			else:
+				Xv = np.transpose(self.seq_dataset.X_val_scaled, (0,2,1))
+				Yv = np.transpose(self.seq_dataset.Y_val_scaled, (0,2,1))
+				Xval_t = Variable(Tensor(Xv))
+				Yval_t = Variable(Tensor(Yv))
+
+
 			for epoch in range(n_epochs):
-				print("Epoch nb. ", epoch+1, "/", n_epochs)
+				
 				tmp_loss = []
 				for i in range(bat_per_epo):
 					
@@ -85,16 +97,21 @@ class Train_SeqSE():
 					
 					# Print some performance to monitor the training
 					tmp_loss.append(loss.item())   
-					if i % 200 == 0:
-						print("Epoch= {},\t batch = {},\t loss = {:2.4f}\t".format(epoch+1, i, tmp_loss[-1]))
-					
+				if epoch % 50 == 0:
+					print("Epoch= {},\t loss = {:2.4f}\t".format(epoch+1, tmp_loss[-1]))
+			
+				Xval_t_pred = self.seq_se(Yval_t)
+				val_losses.append(loss_fnc(Xval_t_pred, Xval_t))
+
 				losses.append(np.mean(tmp_loss))
 
 			fig_loss = plt.figure()
-			plt.plot(np.arange(n_epochs), losses)
+			plt.plot(np.arange(n_epochs), losses, label="train")
+			plt.plot(np.arange(n_epochs), val_losses, label="valid")
+			plt.legend()
 			plt.tight_layout()
 			plt.title("loss")
-			fig_loss.savefig(self.results_path+"/A_losses.png")
+			fig_loss.savefig(self.results_path+"/A_losses{}epochs.png".format(self.n_epochs))
 			plt.close()
 			
 			torch.save(self.seq_se, self.net_path)
