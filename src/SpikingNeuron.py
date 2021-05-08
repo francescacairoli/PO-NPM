@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
-
+import pickle
 
 class SpikingNeuron(object):
 
@@ -29,7 +29,7 @@ class SpikingNeuron(object):
 
 	def sample_init_state(self):
 
-		return np.random.randn(self.state_dim)*(self.ranges[:,1]-self.ranges[:,0])+self.ranges[:,0]
+		return np.random.rand(self.state_dim)*(self.ranges[:,1]-self.ranges[:,0])+self.ranges[:,0]
 
 	def jump_condition(self, t, y):
 		if y[0] >= 30:
@@ -43,7 +43,8 @@ class SpikingNeuron(object):
 
 		time_grid = np.linspace(0,self.time_horizon, self.n_steps)
 		trajectories = np.empty((n_samples, self.n_steps, self.state_dim))
-		for i in range(n_samples):
+		i = 0
+		while i < n_samples:
 			#print("Point {}/{}".format(i+1,n_samples))
 			y0 = self.sample_init_state()
 			
@@ -73,8 +74,9 @@ class SpikingNeuron(object):
 				y0 = global_sol[:,-1]
 				count += 1
 				t += dt
-
-			trajectories[i] = time_grid_sol.T
+			if np.all(time_grid_sol[:,-1] >= self.ranges[:,0]) and np.all(time_grid_sol[:,-1] <= self.ranges[:,1]):
+				trajectories[i] = time_grid_sol.T
+				i += 1
 
 		return trajectories
 
@@ -114,3 +116,20 @@ class SpikingNeuron(object):
 
 		return labels
 
+if __name__=='__main__':
+
+	n_points = 8500
+
+	sn_model = SpikingNeuron()
+	trajs = sn_model.gen_trajectories(n_points)
+	noisy_measurments = sn_model.get_noisy_measurments(trajs)
+	labels = sn_model.gen_labels(trajs[:,-1])
+	print("Percentage of positive points: ", np.sum(labels)/n_points)
+
+	dataset_dict = {"x": trajs, "y": noisy_measurments, "cat_labels": labels}
+
+	filename = 'Datasets/SN_calibration_set_8500.pickle'
+	with open(filename, 'wb') as handle:
+		pickle.dump(dataset_dict, handle)
+	handle.close()
+	print("Data stored in: ", filename)

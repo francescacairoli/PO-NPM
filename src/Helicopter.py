@@ -33,7 +33,7 @@ class Helicopter(object):
 
 	def rand_state(self):
 
-		x = self.state_space[:,0]+(self.state_space[:,1]-self.state_space[:,0])*np.random.randn(self.state_dim)
+		x = self.state_space[:,0]+(self.state_space[:,1]-self.state_space[:,0])*np.random.rand(self.state_dim)
 			
 		return x
 
@@ -80,3 +80,22 @@ class Helicopter(object):
 				noisy_measurements[i, j] = trajs[i, j, obs_idx]+np.random.randn()*self.noise_sigma # we observe variable u = y[1]
 
 		return np.expand_dims(noisy_measurements, axis = 2)
+
+
+if __name__=='__main__':
+	import pickle
+	n_points = 20000
+
+	hc_model = Helicopter()
+	trajs = hc_model.gen_trajectories(n_points)
+	noisy_measurments = hc_model.get_noisy_measurments(trajs)
+	labels = hc_model.gen_labels(trajs[:,-1])
+	print("Percentage of positive points: ", np.sum(labels)/n_points)
+
+	dataset_dict = {"x": trajs, "y": noisy_measurments, "cat_labels": labels}
+
+	filename = 'Datasets/HC_training_set_20K.pickle'
+	with open(filename, 'wb') as handle:
+		pickle.dump(dataset_dict, handle)
+	handle.close()
+	print("Data stored in: ", filename)
