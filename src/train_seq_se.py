@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 22})
 
 cuda = True if torch.cuda.is_available() else False
+#cuda = False
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
 class Train_SeqSE():
@@ -38,7 +39,7 @@ class Train_SeqSE():
 		if self.net_type == "FF":
 			self.seq_se = FF_SeqSE(int(self.seq_dataset.y_dim*self.seq_dataset.traj_len), int(n_hidden), int(self.seq_dataset.x_dim*self.seq_dataset.traj_len))
 		else:
-			self.seq_se = Conv_SeqSE(int(self.seq_dataset.y_dim), 256, int(self.seq_dataset.x_dim))
+			self.seq_se = Conv_SeqSE(int(self.seq_dataset.y_dim), 128, int(self.seq_dataset.x_dim))
 
 		if cuda:
 			self.seq_se.cuda()

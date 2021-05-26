@@ -43,9 +43,9 @@ class FF_SeqNSC(nn.Module):
 
 class Conv_SeqNSC(nn.Module):
 
-	def __init__(self, x_dim = 2, traj_len = 32, output_size = 2, nb_filters = 64):
+	def __init__(self, x_dim = 2, traj_len = 32, output_size = 2, nb_filters = 128):
 		super(Conv_SeqNSC, self).__init__()
-		self.keep_prob = 0.9
+		self.keep_prob = 0.8
 		self.nb_filters = nb_filters
 
 		self.output_size = output_size

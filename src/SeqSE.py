@@ -41,7 +41,7 @@ class Conv_SeqSE(nn.Module):
 	def __init__(self, input_size, nb_filters, output_size):
 		super(Conv_SeqSE, self).__init__()
 		
-		self.keep_prob = 0.9
+		self.keep_prob = 0.8
 		
 		self.layer1 = nn.Sequential(
 			nn.Conv1d(input_size, nb_filters, kernel_size=5, stride=1, padding=2),

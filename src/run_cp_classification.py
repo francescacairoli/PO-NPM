@@ -3,18 +3,30 @@ from SeqDataset import *
 import torch
 from torch.autograd import Variable
 
+def split_train_calibration(full_input, full_output, full_meas, split_rate = 0.7):
+	n_full_points = full_input.shape[0]
+	perm = np.random.permutation(n_full_points)
+	split_index = int(n_full_points*split_rate)
+
+	input_test = full_input[perm[:split_index]]
+	output_test = full_output[perm[:split_index]]
+
+	input_cal = full_input[perm[split_index:]]
+	output_cal = full_output[perm[split_index:]]
+
+	meas_test = full_meas[perm[:split_index]]
+
+	return input_test, output_test, input_cal, output_cal, meas_test
+
 
 cuda = True if torch.cuda.is_available() else False
 FloatTensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 LongTensor = torch.cuda.LongTensor if cuda else torch.LongTensor
 
-model_name = "AP"
-print("Model: ", model_name)
-
+model_name = "HC"
 trainset_fn = "Datasets/"+model_name+"_training_set_20K.pickle"
 testset_fn = "Datasets/"+model_name+"_test_set_10K.pickle"
 validset_fn = "Datasets/"+model_name+"_validation_set_50.pickle"
-calibrset_fn = "Datasets/"+model_name+"_calibration_set_8500.pickle"
 
 
 net_type = "Conv"
@@ -23,12 +35,13 @@ nb_steps = 2
 
 if nb_steps == 2:
 
+
 	if model_name == "SN":
 		nsc_info = ("42223", 200) # (id, nb_epochs)
 		se_info = ("38653", 500) # (id, nb_epochs)
 	if model_name == "IP":
-		nsc_info = ("11955", 200) # (id, nb_epochs)
-		se_info = ("50762", 400)#("77445", 200) # (id, nb_epochs) #"50762", 400
+		nsc_info = ("81147", 200) # (id, nb_epochs)
+		se_info = ("69663", 500) # (id, nb_epochs)
 	if model_name == "AP":
 		nsc_info = ("66287", 200) # (id, nb_epochs)
 		se_info = ("26130", 500) # (id, nb_epochs)
@@ -54,7 +67,7 @@ else:
 	if model_name == "SN":
 		nsc_info = ("67023", 400)
 	if model_name == "IP":
-		nsc_info = ("16480", 400)
+		nsc_info = ("71744", 400)
 	if model_name == "AP":
 		nsc_info = ("94030", 400)
 	if model_name == "HC":
@@ -70,22 +83,20 @@ else:
 
 dataset = SeqDataset(trainset_fn, testset_fn, validset_fn)
 dataset.load_data()
-dataset.add_calibration_path(calibrset_fn)
-dataset.load_calibration_data()
 
 net = torch.load(net_path)
 net.eval()
 
 if nb_steps == 2:
-	input_test = np.transpose(dataset.X_test_scaled, (0,2,1))
-	input_cal = np.transpose(dataset.X_cal_scaled, (0,2,1))
-	meas_test = np.transpose(dataset.Y_test_scaled, (0,2,1))
+	input_test, output_test, input_cal, output_cal, meas_test = split_train_calibration(dataset.X_test_scaled, dataset.L_test, dataset.Y_test_scaled, 0.4)
+	input_test = np.transpose(input_test, (0,2,1))
+	input_cal = np.transpose(input_cal, (0,2,1))
+	meas_test = np.transpose(meas_test, (0,2,1))
 else:
-	input_test = np.transpose(dataset.Y_test_scaled, (0,2,1))
-	input_cal = np.transpose(dataset.Y_cal_scaled, (0,2,1))
+	input_test, output_test, input_cal, output_cal, _ = split_train_calibration(dataset.Y_test_scaled, dataset.L_test, dataset.Y_test_scaled, 0.4)
+	input_test = np.transpose(input_test, (0,2,1))
+	input_cal = np.transpose(input_cal, (0,2,1))
 	
-output_cal = dataset.L_cal
-output_test = dataset.L_test
 # Function returning the probability of class 1
 
 net_fnc = lambda inp: net(Variable(FloatTensor(inp))).cpu().detach().numpy()

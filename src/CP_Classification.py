@@ -157,9 +157,9 @@ class ICP_Classification():
 	def compute_coverage(self, eps, inputs, outputs):
 		p1, p0 = self.get_p_values(x = inputs)
 
-		pred_region = self.get_prediction_region(epsilon = eps, p_pos = p1, p_neg = p0)
+		self.pred_region = self.get_prediction_region(epsilon = eps, p_pos = p1, p_neg = p0)
 
-		return self.get_coverage(pred_region, outputs)
+		return self.get_coverage(self.pred_region, outputs)
 
 
 
@@ -221,3 +221,14 @@ class ICP_Classification():
 		self.cal_conf_cred = confidence_credibility
 
 		return confidence_credibility
+
+
+	def compute_efficiency(self):
+
+		n_singletons = 0
+		n_points = self.pred_region.shape[0]
+		for i in range(n_points):
+			if np.sum(self.pred_region[i]) == 1:
+				n_singletons += 1
+
+		return n_singletons/n_points

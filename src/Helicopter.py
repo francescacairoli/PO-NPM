@@ -10,9 +10,10 @@ class Helicopter(object):
 		self.ranges = []
 		self.horizon = horizon
 		self.state_dim = 29
+		self.obs_dim = 1
 		self.n_steps = n_steps
 		self.noise_sigma = noise_sigma
-
+		self.dt = horizon/n_steps
 		self.state_space = get_state_space()
 		self.state_dim = self.state_space.shape[0]
 
@@ -70,21 +71,26 @@ class Helicopter(object):
 
 		return labels
 
-	def get_noisy_measurments(self, trajs):
+	def get_noisy_measurments(self, trajs, new_sigma=0):
 
 		n_samples, t_sim, state_dim = trajs.shape
+		if new_sigma == 0:
+			sigm = self.noise_sigma
+		else:
+			sigm = new_sigma
+
 		obs_idx = -1
 		noisy_measurements = np.zeros((n_samples, t_sim)) # 1-dim measurement
 		for i in range(n_samples):
 			for j in range(t_sim):
-				noisy_measurements[i, j] = trajs[i, j, obs_idx]+np.random.randn()*self.noise_sigma # we observe variable u = y[1]
+				noisy_measurements[i, j] = trajs[i, j, obs_idx]+np.random.randn()*sigm # we observe variable u = y[1]
 
 		return np.expand_dims(noisy_measurements, axis = 2)
 
 
 if __name__=='__main__':
 	import pickle
-	n_points = 20000
+	n_points = 50000
 
 	hc_model = Helicopter()
 	trajs = hc_model.gen_trajectories(n_points)
@@ -94,7 +100,7 @@ if __name__=='__main__':
 
 	dataset_dict = {"x": trajs, "y": noisy_measurments, "cat_labels": labels}
 
-	filename = 'Datasets/HC_training_set_20K.pickle'
+	filename = 'Datasets/HC_training_set_50K.pickle'
 	with open(filename, 'wb') as handle:
 		pickle.dump(dataset_dict, handle)
 	handle.close()

@@ -1,20 +1,21 @@
 from train_seq_se import *
 from SeqDataset import *
 
-model_name = "IP"
+model_name = "SN"
 trainset_fn = "Datasets/"+model_name+"_training_set_20K.pickle"
 testset_fn = "Datasets/"+model_name+"_validation_set_50.pickle"
+validset_fn = "Datasets/"+model_name+"_validation_set_50.pickle"
 
-n_epochs = 500
+n_epochs = 50
 batch_size = 256
-lr = 0.00005
+lr = 0.000001
 
 net_type = "Conv"
 
 do_training = True
 net_id = "5499"
 
-dataset = SeqDataset(trainset_fn, testset_fn)
+dataset = SeqDataset(trainset_fn, testset_fn, validset_fn)
 seq_se = Train_SeqSE(model_name, dataset, net_type = net_type, training_flag = do_training, idx = net_id)
 
 if do_training:

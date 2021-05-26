@@ -8,10 +8,10 @@ class LaubLoomis(object):
 	# Enzimatic activities: unsafe x4 >= 5
 	# Metto una condizione stretta sugli stati al tempo 0 che poi simulto per un
 	# tempo H_past in cui coprono uno spazio più ampio
-	def __init__(self, horizon = 5, n_steps = 32, noise_sigma = 0.1):
+	def __init__(self, horizon = 5, n_steps = 32, noise_sigma = 0.01):
 		self.W1 = 0.5
 		self.W2 = 0.1
-		
+		self.dt = horizon/n_steps
 		self.ranges = np.array([[1.2-self.W1, 1.2+self.W1],[1.05-self.W1,1.05+self.W1],
 			[1.5-self.W1, 1.5+self.W1],[2.4-self.W1,2.4+self.W1],[1-self.W1,1+self.W1],
 			[0.1-self.W2, 0.1+self.W2], [0.45-self.W1, 0.45+self.W2]])
@@ -55,15 +55,19 @@ class LaubLoomis(object):
 		return trajs
 
 
-	def get_noisy_measurments(self, trajs):
+	def get_noisy_measurments(self, trajs, new_sigma=0):
 		# observe x1, x2
-
+		if new_sigma == 0:
+			sigm = self.noise_sigma
+		else:
+			sigm = new_sigma
+		
 		n_samples, t_sim , state_dim = trajs.shape
 		
 		noisy_measurements = np.zeros((n_samples, t_sim, self.obs_dim)) # 2-dim measurement
 		for i in range(n_samples):
 			for j in range(t_sim):
-				noisy_measurements[i, j] = trajs[i, j, [0,1,2,4,5,6]]+np.random.randn(self.obs_dim)*self.noise_sigma
+				noisy_measurements[i, j] = trajs[i, j, [0,1,2,4,5,6]]+np.random.randn(self.obs_dim)*sigm
 		return noisy_measurements
 
 	def gen_labels(self, states, future_horizon = 20):
@@ -84,7 +88,7 @@ class LaubLoomis(object):
 
 if __name__=='__main__':
 
-	n_points = 20000
+	n_points = 50
 
 	lalo_model = LaubLoomis()
 	trajs = lalo_model.gen_trajectories(n_points)
@@ -94,7 +98,7 @@ if __name__=='__main__':
 
 	dataset_dict = {"x": trajs, "y": noisy_measurments, "cat_labels": labels}
 
-	filename = 'Datasets/LALO_train_set_20K.pickle'
+	filename = 'Datasets/LALO1_validation_set_50.pickle'
 	with open(filename, 'wb') as handle:
 		pickle.dump(dataset_dict, handle)
 	handle.close()

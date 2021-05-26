@@ -12,14 +12,26 @@ class SpikingNeuron(object):
 		self.d = 8
 		self.I = 40
 		self.state_dim = 2
+		self.obs_dim = 1
 		self.ranges = np.array([[-68.5,30.], [0.,25.]])
 		self.unsafe_region = [-np.infty, -68.5] # v
 		self.time_horizon = time_horizon
 		self.noise_sigma = noise_sigma
 		self.n_steps = n_steps
+		self.dt = time_horizon/n_steps
 
-	def diff_eq(self, t, y):
 
+	def diff_eq_iv(self, t, y):
+
+		dydt = np.zeros(self.state_dim)
+
+		dydt[0] = 0.04*y[0]**2+5*y[0]+140-y[1]+self.I
+		dydt[1] = self.a*(self.b*y[0]-y[1])
+
+		return dydt
+
+	def diff_eq(self, y, t):
+		y = y if y[0] >= 30 else (self.c, y[1]+self.d)
 		dydt = np.zeros(self.state_dim)
 
 		dydt[0] = 0.04*y[0]**2+5*y[0]+140-y[1]+self.I
@@ -54,7 +66,7 @@ class SpikingNeuron(object):
 			count, t = 0, 0
 			while count < self.n_steps:
 				tspan = [t, t+dt]
-				sol = solve_ivp(self.diff_eq, tspan, y0, events = self.jump_condition)
+				sol = solve_ivp(self.diff_eq_iv, tspan, y0, events = self.jump_condition)
 				if t == 0:
 					global_sol = sol.y
 					global_t = sol.t
@@ -68,7 +80,7 @@ class SpikingNeuron(object):
 				while len(sol.t_events[0]) > 0:
 					new_tspan = [sol.t_events[0], t+dt]
 					new_y0 = np.array([self.c, self.d+sol.y_events[0][0,1]])
-					sol = solve_ivp(self.diff_eq, new_tspan, new_y0, events = self.jump_condition)
+					sol = solve_ivp(self.diff_eq_iv, new_tspan, new_y0, events = self.jump_condition)
 					global_sol = np.hstack((global_sol, sol.y[:, 1:]))
 					global_t = np.hstack((global_t, sol.t[1:]))
 				y0 = global_sol[:,-1]
@@ -81,13 +93,16 @@ class SpikingNeuron(object):
 		return trajectories
 
 
-	def get_noisy_measurments(self, full_trajs):
+	def get_noisy_measurments(self, full_trajs, new_sigma=0):
 
 		n_samples, t_sim, state_dim = full_trajs.shape
-		
+		if new_sigma == 0:
+			sigm = self.noise_sigma
+		else:
+			sigm = new_sigma
 		noisy_measurements = np.zeros((n_samples, t_sim)) # 1-dim measurement
 		for i in range(n_samples):
-			noisy_measurements[i] = full_trajs[i, :, 1]+np.random.randn(t_sim)*self.noise_sigma # we observe variable u = y[1]
+			noisy_measurements[i] = full_trajs[i, :, 1]+np.random.randn(t_sim)*sigm # we observe variable u = y[1]
 
 		return np.expand_dims(noisy_measurements, axis = 2)
 
@@ -100,7 +115,7 @@ class SpikingNeuron(object):
 		for i in range(n_states):
 			tspan = [0, future_horizon]
 			y0 = states[i]
-			sol = solve_ivp(self.diff_eq, tspan, y0, events = self.jump_condition)
+			sol = solve_ivp(self.diff_eq_iv, tspan, y0, events = self.jump_condition)
 			
 			global_sol = sol.y
 			global_t = sol.t
@@ -108,7 +123,7 @@ class SpikingNeuron(object):
 			while len(sol.t_events[0]) > 0:
 				new_tspan = [sol.t_events[0], future_horizon]
 				new_y0 = np.array([self.c, self.d+sol.y_events[0][0,1]])
-				sol = solve_ivp(self.diff_eq, new_tspan, new_y0, events = self.jump_condition)
+				sol = solve_ivp(self.diff_eq_iv, new_tspan, new_y0, events = self.jump_condition)
 				global_sol = np.hstack((global_sol, sol.y[:, 1:]))
 				global_t = np.hstack((global_t, sol.t[1:]))
 
@@ -118,9 +133,9 @@ class SpikingNeuron(object):
 
 if __name__=='__main__':
 
-	n_points = 8500
+	n_points = 10000
 
-	sn_model = SpikingNeuron()
+	sn_model = SpikingNeuron(noise_sigma = 0.1)
 	trajs = sn_model.gen_trajectories(n_points)
 	noisy_measurments = sn_model.get_noisy_measurments(trajs)
 	labels = sn_model.gen_labels(trajs[:,-1])
@@ -128,7 +143,7 @@ if __name__=='__main__':
 
 	dataset_dict = {"x": trajs, "y": noisy_measurments, "cat_labels": labels}
 
-	filename = 'Datasets/SN_calibration_set_8500.pickle'
+	filename = 'Datasets/SN1_test_set_10K.pickle'
 	with open(filename, 'wb') as handle:
 		pickle.dump(dataset_dict, handle)
 	handle.close()

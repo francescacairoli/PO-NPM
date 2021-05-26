@@ -6,13 +6,15 @@ import pickle
 
 class InvertedPendulum(object):
 
-	def __init__(self, horizon = 1, n_steps = 32, noise_sigma = 0.1):
+	def __init__(self, horizon = 1, n_steps = 32, noise_sigma = 0.005):
 		self.ranges2 = np.array([[-math.pi/2, math.pi/2],[-1.5,1.5]])
 		self.ranges4 = np.array([[-math.pi/4, math.pi/4],[-1.5,1.5]])
 		self.horizon = horizon
 		self.state_dim = 2
+		self.obs_dim = 1
 		self.n_steps = n_steps
 		self.noise_sigma = noise_sigma
+		self.dt = horizon/n_steps
 
 	def diff_eq(self, y, t):
 		# y = (theta, w)
@@ -56,16 +58,27 @@ class InvertedPendulum(object):
 		return np.transpose(trajs,(0,2,1))
 
 
-	def get_noisy_measurments(self, trajs):
+	def get_noisy_measurments(self, trajs, noise_model = "energy", new_sigma=0):
 
 		n_samples, t_sim , state_dim = trajs.shape
+		if new_sigma == 0:
+			sigm = self.noise_sigma
+		else:
+			sigm = new_sigma
 		
-		noisy_measurements = np.zeros((n_samples, t_sim)) # 1-dim measurement
-		for i in range(n_samples):
-			for j in range(t_sim):
-				noisy_measurements[i, j] = self.energy(trajs[i, j])+np.random.randn()*self.noise_sigma # we observe variable u = y[1]
+		if noise_model == "energy":
+			noisy_measurements = np.zeros((n_samples, t_sim)) # 1-dim measurement
+			for i in range(n_samples):
+				for j in range(t_sim):
+					noisy_measurements[i, j] = self.energy(trajs[i, j])+np.random.randn()*sigm # we observe variable u = y[1]
+			noisy_measurements = np.expand_dims(noisy_measurements, axis = 2)
+		elif noise_model == "noise_only":
+			noisy_measurements = np.zeros((n_samples, t_sim, self.state_dim)) # 1-dim measurement
+			for i in range(n_samples):
+				for j in range(t_sim):
+					noisy_measurements[i, j] = trajs[i, j]+np.random.randn(self.state_dim)*sigm # we observe variable u = y[1]
 
-		return np.expand_dims(noisy_measurements, axis = 2)
+		return noisy_measurements
 
 	def gen_labels(self, states, future_horizon = 5):
 		n_states = states.shape[0]
@@ -83,9 +96,9 @@ class InvertedPendulum(object):
 
 if __name__=='__main__':
 
-	n_points = 8500
+	n_points = 50000
 
-	ip_model = InvertedPendulum()
+	ip_model = InvertedPendulum(noise_sigma = 0.005)
 	trajs = ip_model.gen_trajectories(n_points)
 	noisy_measurments = ip_model.get_noisy_measurments(trajs)
 	labels = ip_model.gen_labels(trajs[:,-1])
@@ -93,7 +106,7 @@ if __name__=='__main__':
 
 	dataset_dict = {"x": trajs, "y": noisy_measurments, "cat_labels": labels}
 
-	filename = 'Datasets/IP_calibration_set_8500.pickle'
+	filename = 'Datasets/IP3_training_set_50K.pickle'
 	with open(filename, 'wb') as handle:
 		pickle.dump(dataset_dict, handle)
 	handle.close()

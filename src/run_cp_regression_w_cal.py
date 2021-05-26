@@ -6,7 +6,7 @@ from torch.autograd import Variable
 cuda = True if torch.cuda.is_available() else False
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
-model_name = "SN"
+model_name = "AP"
 print("Model: ", model_name)
 trainset_fn = "Datasets/"+model_name+"_training_set_20K.pickle"
 testset_fn = "Datasets/"+model_name+"_test_set_10K.pickle"

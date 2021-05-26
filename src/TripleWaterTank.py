@@ -1,11 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import odeint
-
+import pickle
 
 class TripleWaterTank(object):
 
-	def __init__(self, time_horizon = 1, n_steps = 32, noise_sigma = 0.5):
+	def __init__(self, time_horizon = 1, n_steps = 32, noise_sigma = 0.1):
 		self.a = 0.5
 		self.b = 0.5
 		self.g = 9.8
@@ -13,7 +13,8 @@ class TripleWaterTank(object):
 		self.q = [5, 3, 4]
 		self.Lm = 5
 		self.LM = 5
-
+		self.dt = time_horizon/n_steps
+		self.obs_dim = 3
 		self.state_dim = 3
 		self.eta = 2
 		self.eta_safety = 0.5
@@ -64,25 +65,37 @@ class TripleWaterTank(object):
 			#print("Point {}/{}".format(i+1,n_samples))
 			y0 = self.sample_init_state()
 			yy = odeint(self.diff_eq, y0, tspan)
-			trajs[i] = yy.T
-			for j in range(self.state_dim):
-				for k in range(self.n_steps):
-					if trajs[i, j, k] > self.LM:
-						pumps[i,j,k] = 0
 
-			i += 1
+			if np.max(yy) < 20 and np.min(yy)>0.0000001:
+				trajs[i] = yy.T
+				for j in range(self.state_dim):
+					for k in range(self.n_steps):
+						if trajs[i, j, k] > self.LM:
+							pumps[i,j,k] = 0
+
+				i += 1
+
+
 
 		return np.transpose(trajs,(0,2,1))
 
 
-	def get_noisy_measurments(self, trajs):
+	def get_noisy_measurments(self, trajs, new_sigma=0):
 
 		n_samples, t_sim, state_dim = trajs.shape
-		
+		if new_sigma == 0:
+			sigm = self.noise_sigma
+		else:
+			sigm = new_sigma
+
 		noisy_measurements = np.zeros((n_samples, state_dim, t_sim)) # 1-dim measurement
 		for i in range(n_samples):
 			for j in range(t_sim):
-				noisy_measurements[i, :, j] = trajs[i, j]+np.random.randn(state_dim)*self.noise_sigma # we observe variable u = y[1]
+				nm = trajs[i, j]+np.random.randn(state_dim)*sigm # we observe variable u = y[1]
+				
+				for k in range(state_dim):
+					if nm[k] >= 0:
+						noisy_measurements[i, k, j] = nm[k]
 
 		return np.transpose(noisy_measurements, (0,2,1))
 
@@ -100,3 +113,26 @@ class TripleWaterTank(object):
 
 		return labels
 
+
+if __name__=='__main__':
+
+	n_points = 8500
+	past_horizon = 3
+	future_horizon = 1
+
+	twt_model = TripleWaterTank(time_horizon = past_horizon, noise_sigma = 0.01)
+	trajs = twt_model.gen_trajectories(n_points)
+	
+	noisy_measurments = twt_model.get_noisy_measurments(trajs)
+	
+	labels = twt_model.gen_labels(trajs[:,-1])
+	
+	print("Percentage of positive points: ", np.sum(labels)/n_points)
+
+	dataset_dict = {"x": trajs, "y": noisy_measurments, "cat_labels": labels}
+
+	filename = 'Datasets/TWT_calibration_set_8500.pickle'
+	with open(filename, 'wb') as handle:
+		pickle.dump(dataset_dict, handle)
+	handle.close()
+	print("Data stored in: ", filename)

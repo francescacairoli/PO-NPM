@@ -1,14 +1,14 @@
 from train_stoch_seq_nsc import *
 from SeqDataset import *
 
-model_name = "AP"
+model_name = "IP"
 trainset_fn = "Datasets/"+model_name+"_training_set_20K.pickle"
 testset_fn = "Datasets/"+model_name+"_test_set_10K.pickle"
 validset_fn = "Datasets/"+model_name+"_validation_set_50.pickle"
 
-n_epochs = 200
+n_epochs = 100
 batch_size = 256
-lr = 0.00005
+lr = 0.000001
 
 net_type = "Conv"
 
@@ -24,16 +24,20 @@ if net_type == "FF":
 		se_info = ("93779", 1000) # (id, nb_epochs)
 else:
 	if model_name == "SN":
-		nsc_info = ("10095", 1000) # (id, nb_epochs)
-		se_info = ("5499", 1000) # (id, nb_epochs)
+		nsc_info = ("42223", 200) # (id, nb_epochs)
+		se_info = ("38653", 500) # (id, nb_epochs)
 	if model_name == "IP":
-		nsc_info = ("76632", 500) # (id, nb_epochs)
-		se_info = ("99771", 500) # (id, nb_epochs)
+		nsc_info = ("11955", 200) # (id, nb_epochs)
+		se_info = ("77445", 200) # (id, nb_epochs)
 	if model_name == "AP":
-		nsc_info = ("33952", 500) # (id, nb_epochs)
-		se_info = ("92927", 500) # (id, nb_epochs)
-
-		
+		nsc_info = ("66287", 200) # (id, nb_epochs)
+		se_info = ("26130", 500) # (id, nb_epochs)
+	if model_name == "HC":
+		nsc_info = ("2775", 200) # (id, nb_epochs)
+		se_info = ("51022", 200) # (id, nb_epochs)
+	if model_name == "TWT":
+		nsc_info = ("25056", 200)
+		se_info = ("13560", 200)
 
 do_finetuning = True
 

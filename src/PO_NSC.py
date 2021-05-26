@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 class Conv_PO_NSC(nn.Module):
 
-    def __init__(self, y_dim = 1, traj_len = 32, n_filters = 64, output_size = 2):
+    def __init__(self, y_dim = 1, traj_len = 32, n_filters = 128, output_size = 2):
         super(Conv_PO_NSC, self).__init__()
         
         self.keep_prob = 0.8

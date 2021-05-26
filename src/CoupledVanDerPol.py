@@ -6,9 +6,9 @@ import pickle
 
 class CoupledVanDerPol(object):
 
-	def __init__(self, horizon = 8, n_steps = 32, noise_sigma = 0.1):
+	def __init__(self, horizon = 8, n_steps = 32, noise_sigma = 0.01):
 		self.ranges = np.array([[-2.5, 2.5],[-4.05,4.05],[-2.5, 2.5],[-4.05,4.05]])
-		
+		self.dt = horizon/n_steps
 		self.horizon = horizon
 		self.state_dim = 4
 		self.obs_dim = 2
@@ -47,15 +47,18 @@ class CoupledVanDerPol(object):
 		return trajs
 
 
-	def get_noisy_measurments(self, trajs):
+	def get_noisy_measurments(self, trajs, new_sigma=0):
 		# observe x1, x2
-
+		if new_sigma == 0:
+			sigm = self.noise_sigma
+		else:
+			sigm = new_sigma
 		n_samples, t_sim , state_dim = trajs.shape
 		
 		noisy_measurements = np.zeros((n_samples, t_sim, self.obs_dim)) # 2-dim measurement
 		for i in range(n_samples):
 			for j in range(t_sim):
-				noisy_measurements[i, j] = [trajs[i, j, 0]+np.random.randn()*self.noise_sigma, trajs[i, j, 2]+np.random.randn()*self.noise_sigma] 
+				noisy_measurements[i, j] = [trajs[i, j, 0]+np.random.randn()*sigm, trajs[i, j, 2]+np.random.randn()*sigm] 
 		return noisy_measurements
 
 	def gen_labels(self, states, future_horizon = 7):
@@ -76,7 +79,7 @@ class CoupledVanDerPol(object):
 
 if __name__=='__main__':
 
-	n_points = 8500
+	n_points = 10000
 
 	cvdp_model = CoupledVanDerPol()
 	trajs = cvdp_model.gen_trajectories(n_points)
@@ -86,7 +89,7 @@ if __name__=='__main__':
 
 	dataset_dict = {"x": trajs, "y": noisy_measurments, "cat_labels": labels}
 
-	filename = 'Datasets/CVDP_calibration_set_8500.pickle'
+	filename = 'Datasets/CVDP1_test_set_10K.pickle'
 	with open(filename, 'wb') as handle:
 		pickle.dump(dataset_dict, handle)
 	handle.close()
