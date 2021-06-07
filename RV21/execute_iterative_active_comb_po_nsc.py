@@ -16,68 +16,59 @@ from LaubLoomis import *
 from ArtificialPancreas import *
 import time
 
-model_name = "IP3"
-DO_REFINEMENT = True
+parser = argparse.ArgumentParser()
+parser.add_argument("--model_name", type=str, default="IP", help="Name of the model (first letters code).")
+parser.add_argument("--do_refinement", type=bool, default=True, help="Flag: refine of the rejection rule.")
+parser.add_argument("--nb_active_iteratiions", type=int, default=1, help="Number of active learning iterations.")
+parser.add_argument("--nb_epochs", type=int, default=200, help="Number of epochs.")
+parser.add_argument("--nb_epochs_active", type=int, default=400, help="Number of epochs in active learning.")
+parser.add_argument("--batch_size", type=int, default=64, help="Batch size.")
+parser.add_argument("--lr", type=float, default=0.00001, help="Adam: learning rate")
+parser.add_argument("--lr_tuning", type=float, default=0.000001, help="Adam: learning rate for fine tuning")
+parser.add_argument("--net_type", type=str, default="Conv", help="Type of the net: Conv or FF.")
+parser.add_argument("--nb_filters", type=int, default=128, help="Number of filters per conv layer.")
+parser.add_argument("--epsilon", type=float, default=0.05, help="CP significance level.")
+parser.add_argument("--split_rate", type=float, default=50/65, help="adam: learning rate")
+parser.add_argument("--pool_size_ref", type=int, default=25000, help="Size of the pool for the refinement step.")
+parser.add_argument("--pool_size", type=int, default=50000, help="Size of the pool for one active learning step.")
+parser.add_argument("--reinit_weights", type=bool, default=False, help="Flag: do reinitialize the weights in active learning steps.")
+parser.add_argument("--do_finetuning", type=bool, default=False, help="Flag: do fine-tuning of the two step process.")
+parser.add_argument("--nb_epochs_tuning", type=int, default=100, help="Number of epochs of fine-tuning.")
+parser.add_argument("--nb_epochs_active_tuning", type=int, default=200, help="Number of epochs of fine-tuning in active learning.")
 
-print("REFINEMENT = ", DO_REFINEMENT)
-print("MODEL = ", model_name)
-trainset_fn = "Datasets/"+model_name+"_training_set_50K.pickle"
-testset_fn = "Datasets/"+model_name+"_test_set_10K.pickle"
-validset_fn = "Datasets/"+model_name+"_validation_set_50.pickle"
-calibrset_fn = "Datasets/"+model_name+"_calibration_set_8500.pickle"
+opt = parser.parse_args()
+print(opt)
 
-if model_name == "IP" or model_name == "IP1" or model_name == "IP2" or model_name == "IP3":
-	model = InvertedPendulum()
-elif model_name == "SN" or model_name == "SN1":
-	model = SpikingNeuron()
-elif model_name == "TWT":
-	model = TripleWaterTank()
-elif model_name == "HC":
-	model = Helicopter()
-elif model_name == "CVDP" or model_name == "CVDP1":
-	model = CoupledVanDerPol()
-elif model_name == "LALO" or model_name == "LALO1":
-	model = LaubLoomis()
-elif model_name == "AP" or model_name == "AP1" or model_name == "AP2":
-	model = ArtificialPancreas()
+# Generate a instance of the class of the model corresponding to opt.model_name
+models_dict = {"IP": InvertedPendulum(), "SN": SpikingNeuron(), "TWT": TripleWaterTank(), "CVDP": CoupledVanDerPol(), "LALO": LaubLoomis(), "HC": Helicopter()}
+model = models_dict[opt.model_name]
 
-n_active_iterations = 1
-
-n_epochs = 200
-batch_size = 64
-lr = 0.000001
-nb_filters = 128
-
-net_type = "Conv"
-
-do_finetuning = True
-
-epsilon = 0.05
-split_rate = 20/28.5
+trainset_fn = "Datasets/"+opt.model_name+"_training_set_50K.pickle"
+testset_fn = "Datasets/"+opt.model_name+"_test_set_10K.pickle"
+validset_fn = "Datasets/"+opt.model_name+"_validation_set_50.pickle"
+calibrset_fn = "Datasets/"+opt.model_name+"_calibration_set_15K.pickle"
 
 dataset = SeqDataset(trainset_fn, testset_fn, validset_fn)
 dataset.load_data()
 dataset.add_calibration_path(calibrset_fn)
 dataset.load_calibration_data()
 
-se = Train_SeqSE(model_name, dataset, net_type = net_type)
+se = Train_SeqSE(model_name, dataset, net_type = opt.net_type)
 start_time = time.time()
-se.train(n_epochs, batch_size, lr=lr)
+se.train(opt.nb_epochs, opt.batch_size, lr=opt.lr)
 print("SE TRAINING TIME: ", time.time()-start_time)
 
-nsc = Train_SeqNSC(model_name, dataset, net_type = net_type, nb_filters = nb_filters)
+nsc = Train_SeqNSC(model_name, dataset, net_type = opt.net_type, nb_filters = opt.nb_filters)
 start_time = time.time()
-nsc.train(n_epochs, batch_size, lr)
+nsc.train(opt.nb_epochs, opt.batch_size, opt.lr)
 print("NSC TRAINING TIME: ", time.time()-start_time)
 
-nsc_info = (nsc.idx, n_epochs)
-se_info = (se.idx, n_epochs)
+nsc_info = (nsc.idx, opt.nb_epochs)
+se_info = (se.idx, opt.nb_epochs)
 
-n_epochs_tuning = 200
-lr_tuning = 0.0000001
-comb_ponsc = Train_StochSeqNSC(model_name, dataset, net_type = net_type, fine_tuning_flag = do_finetuning, seq_nsc_idx = nsc_info, seq_se_idx = se_info)
+comb_ponsc = Train_StochSeqNSC(model_name, dataset, net_type = opt.net_type, fine_tuning_flag = opt.do_finetuning, seq_nsc_idx = nsc_info, seq_se_idx = se_info)
 start_time = time.time()
-comb_ponsc.train(n_epochs_tuning, batch_size, lr_tuning)
+comb_ponsc.train(opt.nb_epochs_tuning, opt.batch_size, opt.lr_tuning)
 print("FINE TUNING TRAINING TIME: ", time.time()-start_time)
 
 comb_ponsc.generate_test_results()
@@ -104,30 +95,30 @@ cp_comb_class = ICP_Classification(Xc = meas_cal, Yc = output_cal, trained_model
 cp_regr = ICP_Regression(Xc = meas_cal, Yc = state_cal, trained_model = se_fnc)
 
 print("----- Computing CP Regression validity and (box) efficiency...")
-se_box_coverage = cp_regr.get_box_coverage(epsilon, meas_test, state_test)
+se_box_coverage = cp_regr.get_box_coverage(opt.epsilon, meas_test, state_test)
 se_box_efficiency = cp_regr.get_efficiency(box_flag = True)
-print("Box-Coverage for significance = ", 1-epsilon, ": ", se_box_coverage, "; Box Efficiency = ", se_box_efficiency)
+print("Box-Coverage for significance = ", 1-opt.epsilon, ": ", se_box_coverage, "; Box Efficiency = ", se_box_efficiency)
 
 
 print("----- Computing CP Regression validity and NON-BOX efficiency...")
-se_coverage = cp_regr.get_coverage(epsilon, meas_test, state_test)
+se_coverage = cp_regr.get_coverage(opt.epsilon, meas_test, state_test)
 se_efficiency = cp_regr.get_efficiency(box_flag = False)
-print("Regr (NON-BOX) Coverage for significance = ", 1-epsilon, ": ", se_coverage, "; Efficiency = ", se_efficiency)
+print("Regr (NON-BOX) Coverage for significance = ", 1-opt.epsilon, ": ", se_coverage, "; Efficiency = ", se_efficiency)
 
 print("----- Computing test CP classification validity...")
 print("Coverage on the test set states:")
-nsc_coverage = cp_class.compute_coverage(eps=epsilon, inputs=state_test, outputs=output_test)
+nsc_coverage = cp_class.compute_coverage(eps=opt.epsilon, inputs=state_test, outputs=output_test)
 nsc_efficiency = cp_class.compute_efficiency()
 print("Test empirical coverage: ", nsc_coverage, " Efficiency = ", nsc_efficiency)
 
 print("Coverage on the test states estimated by the SE:")
 estim_state_test = se_fnc(meas_test)
-ponsc_coverage = cp_class.compute_coverage(eps=epsilon, inputs=estim_state_test, outputs=output_test)
+ponsc_coverage = cp_class.compute_coverage(eps=opt.epsilon, inputs=estim_state_test, outputs=output_test)
 print("Test empirical coverage on ESTIM STATES: ", ponsc_coverage, " (Expected = ", 1-epsilon, ")")
 
 print("----- Computing test CP COMB classification validity...")
 print("Coverage on the test set measurments:")
-ponsc_coverage = cp_comb_class.compute_coverage(eps=epsilon, inputs=meas_test, outputs=output_test)
+ponsc_coverage = cp_comb_class.compute_coverage(eps=opt.epsilon, inputs=meas_test, outputs=output_test)
 ponsc_efficiency = cp_comb_class.compute_efficiency()
 print("Test empirical coverage: ", ponsc_coverage, "Efficiency:", ponsc_efficiency)
 
@@ -166,12 +157,11 @@ nb_detected_fp,nb_fp, nb_detected_fn,nb_fn = res
 
 print("FP Detection rate: ", fp_detection_rate, "FN Detection rate: ", fn_detection_rate)
 
-if DO_REFINEMENT:
+if opt.do_refinement:
 	print("----- REFINEMENT of the Rejection Rule...")
-	pool_size_ref = 25000
-	unc_meas_ref, unc_states_ref, unc_outputs_ref = utils.Comb2_PONSC_active_sample_query(pool_size = pool_size_ref, model_class = model, conf_pred = cp_comb_class, trained_svc = query_fnc, se_fnc= se_fnc, dataset=dataset)
+	unc_meas_ref, unc_states_ref, unc_outputs_ref = utils.Comb_PONSC_active_sample_query(pool_size = opt.pool_size_ref, model_class = model, conf_pred = cp_comb_class, trained_svc = query_fnc, se_fnc= se_fnc, dataset=dataset)
 	n_ref_points = len(unc_meas_ref)
-	print("Nb of points to add: ", n_ref_points, "/", pool_size_ref)
+	print("Nb of points to add: ", n_ref_points, "/", opt.pool_size_ref)
 
 	meas_cal_ref = np.vstack((dataset.Y_cal_scaled, unc_meas_ref))
 	state_cal_ref = np.vstack((dataset.X_cal_scaled, unc_states_ref))
@@ -204,27 +194,26 @@ curr_cp_comb_class = cp_comb_class
 curr_query_fnc = query_fnc
 curr_dataset = dataset
 curr_se_fnc = se_fnc
-for k in range(n_active_iterations):
+for k in range(opt.nb_active_iterations):
 	print("--- xxx ACTIVE ITERATION NB. ", k)
 
 	print("----- Active selection of additional (uncertain) points...")
-	pool_size = 50000
 	start_active = time.time()
-	unc_meas, unc_states, unc_outputs = utils.Comb2_PONSC_active_sample_query(pool_size = pool_size, model_class = model, conf_pred = curr_cp_comb_class, trained_svc = curr_query_fnc, se_fnc= curr_se_fnc, dataset=curr_dataset)
+	unc_meas, unc_states, unc_outputs = utils.Comb_PONSC_active_sample_query(pool_size = opt.pool_size, model_class = model, conf_pred = curr_cp_comb_class, trained_svc = curr_query_fnc, se_fnc= curr_se_fnc, dataset=curr_dataset)
 	print("XXX time to active query points for pool: ", time.time()-start_active)
 	
 	n_active_points = len(unc_outputs)
-	print("Nb of points to add: ", n_active_points, "/", pool_size)
+	print("Nb of points to add: ", n_active_points, "/", opt.pool_size)
 
-	n_retrain = int(np.round(n_active_points*split_rate))
+	n_retrain = int(np.round(opt.nb_active_points*opt.split_rate))
 
-	meas_retrain = np.vstack((dataset.Y_train_scaled, unc_meas[:n_retrain]))
-	state_retrain = np.vstack((dataset.X_train_scaled, unc_states[:n_retrain]))
-	output_retrain = np.hstack((dataset.L_train, unc_outputs[:n_retrain]))
+	meas_retrain = np.vstack((curr_dataset.Y_train_scaled, unc_meas[:n_retrain]))
+	state_retrain = np.vstack((curr_dataset.X_train_scaled, unc_states[:n_retrain]))
+	output_retrain = np.hstack((curr_dataset.L_train, unc_outputs[:n_retrain]))
 
-	meas_recal = np.vstack((dataset.Y_cal_scaled, unc_meas[n_retrain:]))
-	state_recal = np.vstack((dataset.X_cal_scaled, unc_states[n_retrain:]))
-	output_recal = np.hstack((dataset.L_cal, unc_outputs[n_retrain:]))
+	meas_recal = np.vstack((curr_dataset.Y_cal_scaled, unc_meas[n_retrain:]))
+	state_recal = np.vstack((curr_dataset.X_cal_scaled, unc_states[n_retrain:]))
+	output_recal = np.hstack((curr_dataset.L_cal, unc_outputs[n_retrain:]))
 
 	active_dataset = dataset
 	active_dataset.n_training_points = len(output_retrain)
@@ -241,22 +230,21 @@ for k in range(n_active_iterations):
 	print("----- ACTIVE RETRAINING...")
 
 	if False:#Retrain everything from scratch
-		active_se = Train_SeqSE(model_name, active_dataset, net_type = net_type)
-		active_se.train(n_epochs, batch_size, lr=lr)
+		active_se = Train_SeqSE(model_name, active_dataset, net_type = opt.net_type)
+		active_se.train(opt.nb_epochs, opt.batch_size, lr=opt.lr)
 
-		active_nsc = Train_SeqNSC(model_name, active_dataset, net_type = net_type, nb_filters = nb_filters)
-		active_nsc.train(n_epochs, batch_size, lr)
+		active_nsc = Train_SeqNSC(model_name, active_dataset, net_type = opt.net_type, nb_filters = opt.nb_filters)
+		active_nsc.train(opt.nb_epochs, opt.batch_size, opt.lr)
 
-		active_nsc_info = (active_nsc.idx, n_epochs)
-		active_se_info = (active_se.idx, n_epochs)
+		active_nsc_info = (active_nsc.idx, opt.nb_epochs)
+		active_se_info = (active_se.idx, opt.nb_epochs)
 	else:# redo only the finetuning
-		active_nsc_info = (nsc.idx, n_epochs)
-		active_se_info = (se.idx, n_epochs)
+		active_nsc_info = (nsc.idx, opt.nb_epochs)
+		active_se_info = (se.idx, opt.nb_epochs)
 
 
-	n_epochs_active_tuning = 400
-	active_comb_ponsc = Train_StochSeqNSC(model_name, active_dataset, net_type = net_type, fine_tuning_flag = do_finetuning, seq_nsc_idx = active_nsc_info, seq_se_idx = active_se_info)
-	active_comb_ponsc.train(n_epochs_active_tuning, batch_size, lr_tuning)
+	active_comb_ponsc = Train_StochSeqNSC(model_name, active_dataset, net_type = opt.net_type, fine_tuning_flag = opt.do_finetuning, seq_nsc_idx = active_nsc_info, seq_se_idx = active_se_info)
+	active_comb_ponsc.train(opt.nb_epochs_active_tuning, opt.batch_size, opt.lr_tuning)
 	active_comb_ponsc.generate_test_results()
 
 	active_nsc_fnc = lambda inp: active_comb_ponsc.seq_nsc(Variable(FloatTensor(inp))).cpu().detach().numpy() # after fine-tuning
@@ -277,23 +265,23 @@ for k in range(n_active_iterations):
 	active_cp_regr = ICP_Regression(Xc = meas_recal, Yc = state_recal, trained_model = active_se_fnc)
 
 	print("----- ACTIVE Computing CP Regression validity and (box) efficiency...")
-	active_se_coverage = active_cp_regr.get_box_coverage(epsilon, meas_test, state_test)
+	active_se_coverage = active_cp_regr.get_box_coverage(opt.epsilon, meas_test, state_test)
 	active_se_efficiency = active_cp_regr.get_efficiency(box_flag = True)
-	print("Box-Coverage for significance = ", 1-epsilon, ": ", active_se_coverage, "; Box Efficiency = ", active_se_efficiency)
+	print("Box-Coverage for significance = ", 1-opt.epsilon, ": ", active_se_coverage, "; Box Efficiency = ", active_se_efficiency)
 
 	print("----- ACTIVE Computing test CP classification validity...")
 	print("- Coverage on the test set states:")
-	active_nsc_coverage = active_cp_class.compute_coverage(eps=epsilon, inputs=state_test, outputs=output_test)
+	active_nsc_coverage = active_cp_class.compute_coverage(eps=opt.epsilon, inputs=state_test, outputs=output_test)
 	active_nsc_efficiency = active_cp_class.compute_efficiency()
 	print("Test empirical coverage: ", active_nsc_coverage, " Efficiency: ", active_nsc_efficiency)
 
 	print("- Coverage on the test states estimated by the SE:")
 	active_estim_state_test = active_se_fnc(meas_test)
-	active_ponsc_coverage = active_cp_class.compute_coverage(eps=epsilon, inputs=active_estim_state_test, outputs=output_test)
-	print("Test empirical coverage on ESTIM STATES: ", active_ponsc_coverage, " (Expected = ", 1-epsilon, ")")
+	active_ponsc_coverage = active_cp_class.compute_coverage(eps=opt.epsilon, inputs=active_estim_state_test, outputs=output_test)
+	print("Test empirical coverage on ESTIM STATES: ", active_ponsc_coverage, " (Expected = ", 1-opt.epsilon, ")")
 
 	print("- Coverage on the test set measurments (CP COMB):")
-	active_ponsc_coverage = active_cp_comb_class.compute_coverage(eps=epsilon, inputs=meas_test, outputs=output_test)
+	active_ponsc_coverage = active_cp_comb_class.compute_coverage(eps=opt.epsilon, inputs=meas_test, outputs=output_test)
 	active_ponsc_efficiency = active_cp_comb_class.compute_efficiency()
 	print("Test empirical coverage: ", active_ponsc_coverage, " Efficiency: ", active_ponsc_efficiency)
 
@@ -320,10 +308,6 @@ for k in range(n_active_iterations):
 
 	active_fp_indexes, active_fn_indexes = utils.label_fp_fn(np.argmax(active_test_pred_lkh, axis=1), output_test)
 	active_fp_detection_rate, active_fn_detection_rate, active_res = utils.compute_fp_fn_detection_rate(active_test_pred_errors, active_fp_indexes, active_fn_indexes)
-
-	nb_detected_fp,nb_fp, nb_detected_fn,nb_fn = active_res
-	#print("ACTIVE nb_detected_fp/nb_fp = {}/{}".format(nb_detected_fp,nb_fp))
-	#print("ACTIVE nb_detected_fn/nb_fn = {}/{}".format(nb_detected_fn,nb_fn))
 
 	print("ACTIVE FP Detection rate: ", active_fp_detection_rate, "FN Detection rate: ", active_fn_detection_rate)
 

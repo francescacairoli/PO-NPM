@@ -85,21 +85,31 @@ class LaubLoomis(object):
 
 		return labels
 
+	def gen_dataset(self, ds_type):
+		
+		ds_dict = {'training': (50000,'50K'), 'calibration': (15000,'15K'), 'validation': (50,'50'), 'test': (10000,'10K')}
+		
+		n_points, sigla = ds_dict[ds_type]
+		trajs = self.gen_trajectories(n_points)
+		noisy_measurments = self.get_noisy_measurments(trajs)
+		labels = self.gen_labels(trajs[:,-1])
+		print("Percentage of positive points: ", np.sum(labels)/n_points)
 
+		dataset_dict = {"x": trajs, "y": noisy_measurments, "cat_labels": labels}
+
+		filename = 'Datasets/LALO_{}_set_{}.pickle'.format(ds_type, sigla)
+		with open(filename, 'wb') as handle:
+			pickle.dump(dataset_dict, handle)
+		handle.close()
+		print("Data stored in: ", filename)
+
+		
 if __name__=='__main__':
 
-	n_points = 50
+	model = LaubLoomis()
+	model.gen_dataset('traininig')
+	model.gen_dataset('validation')
+	model.gen_dataset('calibration')
+	model.gen_dataset('test')
 
-	lalo_model = LaubLoomis()
-	trajs = lalo_model.gen_trajectories(n_points)
-	noisy_measurments = lalo_model.get_noisy_measurments(trajs)
-	labels = lalo_model.gen_labels(trajs[:,-1])
-	print("Percentage of positive points: ", np.sum(labels)/n_points)
 
-	dataset_dict = {"x": trajs, "y": noisy_measurments, "cat_labels": labels}
-
-	filename = 'Datasets/LALO1_validation_set_50.pickle'
-	with open(filename, 'wb') as handle:
-		pickle.dump(dataset_dict, handle)
-	handle.close()
-	print("Data stored in: ", filename)

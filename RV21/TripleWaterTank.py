@@ -5,7 +5,7 @@ import pickle
 
 class TripleWaterTank(object):
 
-	def __init__(self, time_horizon = 1, n_steps = 32, noise_sigma = 0.01):
+	def __init__(self, time_horizon = 3, n_steps = 32, noise_sigma = 0.01):
 		self.a = 0.5
 		self.b = 0.5
 		self.g = 9.8
@@ -113,26 +113,29 @@ class TripleWaterTank(object):
 
 		return labels
 
+	def gen_dataset(self, ds_type):
+		
+		ds_dict = {'training': (50000,'50K'), 'calibration': (15000,'15K'), 'validation': (50,'50'), 'test': (10000,'10K')}
+		
+		n_points, sigla = ds_dict[ds_type]
+		trajs = self.gen_trajectories(n_points)
+		noisy_measurments = self.get_noisy_measurments(trajs)
+		labels = self.gen_labels(trajs[:,-1])
+		print("Percentage of positive points: ", np.sum(labels)/n_points)
 
+		dataset_dict = {"x": trajs, "y": noisy_measurments, "cat_labels": labels}
+
+		filename = 'Datasets/TWT_{}_set_{}.pickle'.format(ds_type, sigla)
+		with open(filename, 'wb') as handle:
+			pickle.dump(dataset_dict, handle)
+		handle.close()
+		print("Data stored in: ", filename)
+
+		
 if __name__=='__main__':
 
-	n_points = 8500
-	past_horizon = 3
-	future_horizon = 1
-
-	twt_model = TripleWaterTank(time_horizon = past_horizon, noise_sigma = 0.01)
-	trajs = twt_model.gen_trajectories(n_points)
-	
-	noisy_measurments = twt_model.get_noisy_measurments(trajs)
-	
-	labels = twt_model.gen_labels(trajs[:,-1])
-	
-	print("Percentage of positive points: ", np.sum(labels)/n_points)
-
-	dataset_dict = {"x": trajs, "y": noisy_measurments, "cat_labels": labels}
-
-	filename = 'Datasets/TWT_calibration_set_8500.pickle'
-	with open(filename, 'wb') as handle:
-		pickle.dump(dataset_dict, handle)
-	handle.close()
-	print("Data stored in: ", filename)
+	ip_model = TripleWaterTank()
+	ip_model.gen_dataset('traininig')
+	ip_model.gen_dataset('validation')
+	ip_model.gen_dataset('calibration')
+	ip_model.gen_dataset('test')

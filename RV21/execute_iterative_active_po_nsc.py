@@ -15,9 +15,6 @@ import pickle
 import time
 import argparse
 
-n_epochs_active = 400
-	reinit_weights = False
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_name", type=str, default="IP", help="Name of the model (first letters code).")
 parser.add_argument("--do_refinement", type=bool, default=True, help="Flag: refine of the rejection rule.")
