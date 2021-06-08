@@ -1,0 +1,13 @@
+antlr4-python3-runtime    4.7                      pypi_0    pypi
+cudatoolkit               10.2.89              hfd86e86_1  
+matplotlib                3.2.1                         0  
+matplotlib-base           3.2.1            py38hef1b27d_0  
+numpy                     1.18.1           py38h4f9e942_0  
+numpy-base                1.18.1           py38hde5b4d6_1  
+pytorch                   1.5.0           py3.8_cuda10.2.89_cudnn7.6.5_0    pytorch
+scikit-learn              0.23.1           py38h423224d_0  
+scipy                     1.4.1            py38h0b6359f_0  
+seaborn                   0.10.1                     py_0  
+six                       1.15.0                     py_0  
+torchvision               0.6.0                py38_cu102    pytorch
+tqdm                      4.46.0                     py_0  
