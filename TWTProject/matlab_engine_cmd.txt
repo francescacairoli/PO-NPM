@@ -1,7 +1,0 @@
-import matlab.engine
-import matlab
-
-# CALLING MATLAB FUNCTION
-eng = matlab.engine.start_matlab()
-y_add = eng.gen_labels(matlab.double((x_rej.T).tolist()), params["dreal_path"])
-eng.quit()
